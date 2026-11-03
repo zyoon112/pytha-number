@@ -4,688 +4,837 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>피타고라스를 외쳐라!!</title>
-    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Noto Sans KR', sans-serif;
-            user-select: none;
-            -webkit-user-select: none;
+            user-select: none; -webkit-user-select: none;
+            background:
+                radial-gradient(circle at 10% 10%, #fde68a55 0, transparent 35%),
+                radial-gradient(circle at 90% 20%, #bae6fd77 0, transparent 40%),
+                radial-gradient(circle at 50% 100%, #fbcfe855 0, transparent 45%),
+                #fffbeb;
         }
-        .font-jua {
-            font-family: 'Jua', sans-serif;
-        }
-        .card-shadow {
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.15);
-        }
+        .font-jua { font-family: 'Jua', sans-serif; }
         .buzzer-btn {
-            background: radial-gradient(circle at 35% 35%, #ff4d4d, #b30000);
-            box-shadow: 0 12px 0 #800000, 0 15px 20px rgba(0,0,0,0.4);
+            background: radial-gradient(circle at 35% 30%, #ff8a8a, #ef4444 55%, #c81e1e);
+            box-shadow: 0 12px 0 #b91c1c, 0 18px 25px rgba(239,68,68,0.35);
             transition: all 0.08s ease;
         }
-        .buzzer-btn:active {
-            transform: translateY(8px);
-            box-shadow: 0 4px 0 #800000, 0 6px 10px rgba(0,0,0,0.3);
+        .buzzer-btn:active:not(:disabled) { transform: translateY(8px); box-shadow: 0 4px 0 #b91c1c, 0 6px 10px rgba(239,68,68,0.3); }
+        .buzzer-btn:disabled { filter: grayscale(0.7); opacity: 0.45; cursor: not-allowed; }
+        .toast-show { opacity: 1 !important; }
+
+        /* ---- 게임 테이블 ---- */
+        .game-table { container-type: inline-size; }
+        .table-felt {
+            background: radial-gradient(circle at 50% 45%, #dcfce7 0%, #bbf7d0 55%, #86efac 100%);
+            border: 1.6cqw solid #fbbf24;
+            box-shadow: inset 0 0 0 0.6cqw #fde68a, 0 10px 30px rgba(251,191,36,0.35);
         }
-        .card-flip {
-            perspective: 1000px;
+        .card-face {
+            width: 14cqw; height: 20cqw; border-radius: 1.8cqw;
+            background: linear-gradient(145deg, #ffffff, #fef3c7);
+            border: 0.5cqw solid #f59e0b; color: #1e293b;
+            display: flex; align-items: center; justify-content: center; position: relative;
+            font-family: ui-monospace, monospace; font-weight: 900; font-size: 7cqw;
+            box-shadow: 0 0.6cqw 1.2cqw rgba(0,0,0,0.15);
         }
-        .card-inner {
-            transition: transform 0.4s;
-            transform-style: preserve-3d;
+        .card-face .corner { position: absolute; font-size: 2.4cqw; color: #f97316; line-height: 1; }
+        .card-face .corner.tl { top: 1cqw; left: 1.2cqw; }
+        .card-face .corner.br { bottom: 1cqw; right: 1.2cqw; transform: rotate(180deg); }
+        .card-empty {
+            width: 14cqw; height: 20cqw; border-radius: 1.8cqw;
+            border: 0.5cqw dashed #4ade80; background: rgba(255,255,255,0.35);
+            display: flex; align-items: center; justify-content: center;
+            color: #16a34a; font-size: 2.4cqw; font-weight: 700;
         }
-        .gold-border {
-            border: 4px solid #f59e0b;
+        .pile-under {
+            position: absolute; inset: 0; border-radius: 1.8cqw;
+            background: #fffbeb; border: 0.4cqw solid #fcd34d;
         }
-        /* Custom scrollbar */
-        ::-webkit-scrollbar {
-            width: 6px;
+        .card-back {
+            width: 11cqw; height: 16cqw; border-radius: 1.6cqw; position: relative;
+            background: repeating-linear-gradient(45deg, #38bdf8 0 1.2cqw, #60a5fa 1.2cqw 2.4cqw);
+            border: 0.5cqw solid #ffffff;
+            box-shadow: 0.5cqw 0.5cqw 0 #bfdbfe, 1cqw 1cqw 0 #93c5fd, 0 1.4cqw 2cqw rgba(0,0,0,0.2);
+            display: flex; align-items: center; justify-content: center;
+            color: #fff; font-family: 'Jua', sans-serif; font-size: 2.4cqw; text-align: center; line-height: 1.1;
         }
-        ::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 4px;
+        .card-back.empty { background: rgba(255,255,255,0.4); border-style: dashed; border-color: #94a3b8; box-shadow: none; color: #64748b; }
+        .card-back.clickable { cursor: pointer; animation: glow 1.2s ease-in-out infinite; }
+        @keyframes glow { 0%,100% { outline: 0.6cqw solid rgba(249,115,22,0.0); } 50% { outline: 0.6cqw solid rgba(249,115,22,0.9); outline-offset: 0.4cqw; } }
+        .deck-count {
+            position: absolute; bottom: -1.8cqw; right: -1.8cqw; min-width: 5cqw; height: 5cqw; padding: 0 1cqw;
+            border-radius: 999px; background: #f97316; color: #fff; font-family: ui-monospace, monospace; font-weight: 900;
+            font-size: 2.6cqw; display: flex; align-items: center; justify-content: center; border: 0.4cqw solid #fff;
         }
+        .seat-label {
+            font-size: 2.8cqw; padding: 0.6cqw 2cqw; border-radius: 999px; background: #ffffff; color: #334155;
+            font-weight: 800; border: 0.4cqw solid #fde68a; white-space: nowrap; max-width: 30cqw; overflow: hidden; text-overflow: ellipsis;
+        }
+        .seat-label.turn { background: #f97316; color: #fff; border-color: #fdba74; box-shadow: 0 0 0 0.8cqw rgba(249,115,22,0.25); }
+        .flip-in { animation: flipIn 0.35s ease-out; }
+        @keyframes flipIn { 0% { transform: rotateY(90deg) scale(0.8); } 100% { transform: rotateY(0) scale(1); } }
+        .float { animation: float 3s ease-in-out infinite; }
+        @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+        .bubble::after {
+            content: ''; position: absolute; left: -10px; top: 50%; transform: translateY(-50%);
+            border: 8px solid transparent; border-right-color: #ffffff; border-left: 0;
+        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #fcd34d; border-radius: 4px; }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col justify-between overflow-x-hidden">
+<body class="text-slate-800 min-h-screen flex flex-col justify-between overflow-x-hidden">
 
-    <!-- App Container -->
-    <div id="app" class="w-full max-w-4xl mx-auto min-h-screen flex flex-col justify-between p-4 relative">
-        
-        <!-- Header -->
-        <header class="flex justify-between items-center bg-slate-800/80 backdrop-blur border border-slate-700 p-3 rounded-2xl mb-3 shadow-lg">
-            <div class="flex items-center space-x-3">
-                <div class="bg-amber-500 text-slate-950 p-2 rounded-xl text-xl font-bold font-jua flex items-center justify-center w-10 h-10">
-                    <i class="fa-solid fa-shapes"></i>
-                </div>
-                <div>
-                    <h1 class="font-jua text-xl md:text-2xl text-amber-400 tracking-wide">피타고라스를 외쳐라!!</h1>
-                    <p class="text-xs text-slate-400" id="room-info-display">방 미접속</p>
-                </div>
+<!-- 피타고라스 얼굴 일러스트 (한 번 정의해서 여러 곳에서 재사용) -->
+<svg width="0" height="0" style="position:absolute">
+    <symbol id="pytha" viewBox="0 0 200 200">
+        <circle cx="100" cy="100" r="96" fill="#e0f2fe"/>
+        <!-- 토가(옷) -->
+        <path d="M38 200 Q44 156 100 148 Q156 156 162 200Z" fill="#ffffff" stroke="#cbd5e1" stroke-width="3"/>
+        <path d="M68 156 Q100 175 128 200" stroke="#38bdf8" stroke-width="9" fill="none"/>
+        <!-- 귀 -->
+        <ellipse cx="55" cy="100" rx="9" ry="13" fill="#f2c39b"/>
+        <ellipse cx="145" cy="100" rx="9" ry="13" fill="#f2c39b"/>
+        <!-- 얼굴 -->
+        <ellipse cx="100" cy="96" rx="45" ry="52" fill="#f8d5b4"/>
+        <!-- 머리카락 -->
+        <path d="M55 92 Q48 52 76 44 Q100 36 124 44 Q152 52 145 92 Q141 70 124 64 Q100 57 76 64 Q59 70 55 92Z" fill="#e5e7eb"/>
+        <!-- 월계관 -->
+        <g fill="#22c55e">
+            <ellipse cx="58" cy="74" rx="10" ry="5" transform="rotate(-65 58 74)"/>
+            <ellipse cx="64" cy="59" rx="10" ry="5" transform="rotate(-45 64 59)" fill="#16a34a"/>
+            <ellipse cx="75" cy="48" rx="10" ry="5" transform="rotate(-28 75 48)"/>
+            <ellipse cx="88" cy="42" rx="10" ry="5" transform="rotate(-10 88 42)" fill="#16a34a"/>
+            <ellipse cx="112" cy="42" rx="10" ry="5" transform="rotate(10 112 42)" fill="#16a34a"/>
+            <ellipse cx="125" cy="48" rx="10" ry="5" transform="rotate(28 125 48)"/>
+            <ellipse cx="136" cy="59" rx="10" ry="5" transform="rotate(45 136 59)" fill="#16a34a"/>
+            <ellipse cx="142" cy="74" rx="10" ry="5" transform="rotate(65 142 74)"/>
+        </g>
+        <!-- 수염 -->
+        <path d="M56 102 Q58 152 100 180 Q142 152 144 102 Q136 126 120 129 Q100 121 80 129 Q64 126 56 102Z" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+        <path d="M80 145 Q85 155 90 150 M110 150 Q115 155 120 145 M95 160 Q100 168 105 160" stroke="#cbd5e1" stroke-width="2" fill="none" stroke-linecap="round"/>
+        <!-- 콧수염 -->
+        <path d="M76 119 Q89 110 100 117 Q111 110 124 119 Q111 126 100 121 Q89 126 76 119Z" fill="#e2e8f0" stroke="#cbd5e1" stroke-width="1.5"/>
+        <!-- 입 -->
+        <path d="M91 131 Q100 139 109 131" stroke="#c2410c" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <!-- 코 -->
+        <path d="M100 93 Q95 106 99 111 Q104 112 107 108" stroke="#d69e74" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <!-- 눈썹 -->
+        <path d="M71 80 Q81 73 92 79" stroke="#94a3b8" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+        <path d="M108 79 Q119 73 129 80" stroke="#94a3b8" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+        <!-- 눈 -->
+        <ellipse cx="82" cy="93" rx="5" ry="6" fill="#1e293b"/>
+        <ellipse cx="118" cy="93" rx="5" ry="6" fill="#1e293b"/>
+        <circle cx="84" cy="91" r="1.8" fill="#fff"/>
+        <circle cx="120" cy="91" r="1.8" fill="#fff"/>
+        <!-- 볼 -->
+        <circle cx="70" cy="109" r="7" fill="#fca5a5" opacity=".55"/>
+        <circle cx="130" cy="109" r="7" fill="#fca5a5" opacity=".55"/>
+    </symbol>
+</svg>
+
+<div id="app" class="w-full max-w-4xl mx-auto min-h-screen flex flex-col justify-between p-4 relative">
+
+    <!-- Header -->
+    <header class="flex justify-between items-center bg-white/80 backdrop-blur border border-amber-100 p-3 rounded-2xl mb-3 shadow-md">
+        <div class="flex items-center space-x-3">
+            <svg class="w-11 h-11 rounded-full ring-2 ring-amber-300 shadow"><use href="#pytha"/></svg>
+            <div>
+                <h1 class="font-jua text-xl md:text-2xl text-orange-500 tracking-wide">피타고라스를 외쳐라!!</h1>
+                <p class="text-xs text-slate-500" id="room-info-display">방 미접속</p>
             </div>
-            
-            <div id="user-badge" class="hidden flex items-center space-x-2 bg-slate-700/80 px-3 py-1.5 rounded-xl border border-slate-600">
-                <span class="w-3 h-3 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span id="player-name-tag" class="font-bold text-sm text-slate-200"></span>
+        </div>
+        <div id="user-badge" class="hidden flex items-center space-x-2 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">
+            <span class="w-3 h-3 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span id="player-name-tag" class="font-bold text-sm text-slate-700"></span>
+        </div>
+    </header>
+
+    <!-- VIEW 1: LOBBY -->
+    <main id="view-lobby" class="flex-1 flex flex-col justify-center items-center py-6">
+        <div class="w-full max-w-md bg-white border border-amber-100 rounded-3xl p-6 shadow-xl space-y-6">
+            <div class="text-center space-y-3">
+                <div class="flex items-center justify-center gap-3">
+                    <svg class="w-28 h-28 float drop-shadow-lg"><use href="#pytha"/></svg>
+                    <div class="bubble relative bg-white border-2 border-amber-200 rounded-2xl px-3 py-2 font-jua text-orange-500 text-lg shadow-sm">
+                        a² + b² = c²!
+                    </div>
+                </div>
+                <h2 class="text-2xl font-bold font-jua text-slate-800">수학 피타고라스 카드 게임</h2>
+                <p class="text-sm text-slate-500">세 숫자가 <span class="text-orange-500 font-bold">a² + b² = c²</span> 을 만족할 때<br>가장 먼저 버저를 누르세요!</p>
             </div>
-        </header>
 
-        <!-- VIEW 1: ROLE SELECTION & ROOM CREATION/JOIN -->
-        <main id="view-lobby" class="flex-1 flex flex-col justify-center items-center py-6">
-            <div class="w-full max-w-md bg-slate-800/90 border border-slate-700 rounded-3xl p-6 shadow-2xl space-y-6">
-                
-                <div class="text-center space-y-2">
-                    <div class="inline-block bg-amber-500/20 text-amber-400 p-4 rounded-full mb-1">
-                        <i class="fa-solid fa-square-root-variable text-4xl"></i>
-                    </div>
-                    <h2 class="text-2xl font-bold font-jua text-slate-100">수학 피타고라스 카드 게임</h2>
-                    <p class="text-sm text-slate-400">세 숫자가 <span class="text-amber-400 font-bold">a² + b² = c²</span> 을 만족할 때<br>가장 먼저 버저를 누르세요!</p>
-                </div>
-
-                <!-- Role Selector Tabs -->
-                <div class="grid grid-cols-2 gap-2 p-1 bg-slate-900/60 rounded-xl border border-slate-700/60">
-                    <button id="tab-student" onclick="switchRoleTab('student')" class="py-2.5 rounded-lg text-sm font-bold transition-all bg-amber-500 text-slate-950 shadow">
-                        <i class="fa-solid fa-user-graduate mr-1.5"></i>학생 입장
-                    </button>
-                    <button id="tab-teacher" onclick="switchRoleTab('teacher')" class="py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-slate-200 transition-all">
-                        <i class="fa-solid fa-chalkboard-user mr-1.5"></i>교사 모둠 생성
-                    </button>
-                </div>
-
-                <!-- Student Join Form -->
-                <div id="form-student" class="space-y-4">
-                    <div>
-                        <label class="block text-xs font-bold text-slate-400 mb-1">학생 이름 / 닉네임</label>
-                        <input type="text" id="input-student-name" placeholder="예: 홍길동" maxlength="8" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-amber-500 transition">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-slate-400 mb-1">모둠 코드 (4자리 숫자)</label>
-                        <input type="text" id="input-room-code" placeholder="예: 1234" maxlength="4" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-center font-mono text-xl tracking-widest focus:outline-none focus:border-amber-500 transition">
-                    </div>
-                    <button onclick="joinGameRoom()" class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold font-jua text-lg py-3.5 rounded-xl shadow-lg transition transform active:scale-95">
-                        게임 참가하기
-                    </button>
-                </div>
-
-                <!-- Teacher Create Form -->
-                <div id="form-teacher" class="space-y-4 hidden">
-                    <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 text-xs text-slate-400 space-y-1">
-                        <p class="font-bold text-slate-300 mb-1"><i class="fa-solid fa-circle-info text-amber-400 mr-1"></i>3인 모둠 자동 생성 안내</p>
-                        <p>• 학급 전체 학생 수를 **3의 배수**로 입력하면 3인 모둠 코드가 생성됩니다.</p>
-                        <p>• 생성된 코드를 각 모둠에 전달해 주세요.</p>
-                    </div>
-
-                    <div class="space-y-3">
-                        <div>
-                            <label class="block text-xs font-bold text-slate-400 mb-1">학급 전체 학생 수 (3의 배수)</label>
-                            <div class="flex space-x-2">
-                                <input type="number" id="input-total-students" placeholder="예: 24" step="3" min="3" max="60" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white font-mono text-lg focus:outline-none focus:border-indigo-500 transition">
-                                <button onclick="generateMultipleRooms()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold font-jua px-5 py-3 rounded-xl shadow-lg transition whitespace-nowrap">
-                                    모둠 생성
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- List of generated room codes for teacher (Grid layout without scrollbar) -->
-                    <div id="teacher-rooms-container" class="hidden space-y-2 pt-2 border-t border-slate-700/60">
-                        <label class="block text-xs font-bold text-amber-400 mb-1"><i class="fa-solid fa-list-check mr-1"></i>생성된 모둠 코드 목록 (3인 모둠)</label>
-                        <div id="teacher-rooms-list" class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                            <!-- Dynamic generated rooms list -->
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Status Message -->
-                <div id="lobby-status" class="text-center text-xs font-bold text-rose-400 min-h-[1.25rem]"></div>
-            </div>
-        </main>
-
-        <!-- VIEW 2: WAITING ROOM -->
-        <main id="view-waiting" class="flex-1 flex flex-col justify-center items-center py-6 hidden">
-            <div class="w-full max-w-md bg-slate-800/90 border border-slate-700 rounded-3xl p-6 shadow-2xl text-center space-y-6">
-                
-                <div>
-                    <span class="text-xs font-bold uppercase text-slate-400 tracking-wider">모둠 코드</span>
-                    <div class="flex items-center justify-center space-x-2 mt-1">
-                        <div id="display-room-code" class="text-4xl font-mono font-black text-amber-400 tracking-widest bg-slate-900 px-6 py-2 rounded-2xl border border-amber-500/30">
-                            ----
-                        </div>
-                    </div>
-                    <p class="text-xs text-slate-400 mt-2">태블릿으로 위 코드를 입력하여 접속하세요.</p>
-                </div>
-
-                <!-- Player List (3 max) -->
-                <div class="space-y-2 text-left">
-                    <div class="flex justify-between items-center px-1">
-                        <span class="text-xs font-bold text-slate-400">참가자 목록 (<span id="waiting-count">0</span>/3)</span>
-                        <span class="text-xs text-emerald-400 animate-pulse font-semibold">대기 중...</span>
-                    </div>
-
-                    <div id="waiting-players-list" class="space-y-2">
-                        <!-- Dynamic Player Badges -->
-                    </div>
-                </div>
-
-                <!-- Game Rules Briefing -->
-                <div class="bg-slate-900/60 p-4 rounded-2xl border border-slate-700/60 text-left text-xs space-y-1.5 text-slate-300">
-                    <p class="font-bold text-amber-400 text-sm mb-1"><i class="fa-solid fa-book-open mr-1.5"></i>게임 규칙 확인</p>
-                    <p>1. 3명이 차례대로 카드를 뒤집습니다.</p>
-                    <p>2. 펼쳐진 3장의 카드 숫자가 **피타고라스 수** (a² + b² = c²)가 되면 중앙 **버저**를 누르세요!</p>
-                    <p>3. 가장 먼저 누르면 바닥의 카드를 모두 획득합니다.</p>
-                    <p>4. 잘못 누르면 나머지 두 사람에게 카드 1장씩을 줍니다.</p>
-                    <p>5. 카드가 떨어진 사람이 생기면 종료되며, 가장 카드가 많은 사람이 승리합니다!</p>
-                </div>
-
-                <!-- Host Start Button -->
-                <button id="btn-start-game" onclick="startGame()" disabled class="w-full bg-emerald-600 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed hover:bg-emerald-500 text-white font-bold font-jua text-lg py-3.5 rounded-xl shadow-lg transition">
-                    게임 시작하기 (3명 필요)
+            <div class="grid grid-cols-2 gap-2 p-1 bg-amber-50 rounded-xl border border-amber-100">
+                <button id="tab-student" onclick="switchRoleTab('student')" class="py-2.5 rounded-lg text-sm font-bold transition-all bg-amber-400 text-slate-900 shadow">
+                    <i class="fa-solid fa-user-graduate mr-1.5"></i>학생 입장
+                </button>
+                <button id="tab-teacher" onclick="switchRoleTab('teacher')" class="py-2.5 rounded-lg text-sm font-bold text-slate-500 hover:text-slate-700 transition-all">
+                    <i class="fa-solid fa-chalkboard-user mr-1.5"></i>교사 모둠 생성
                 </button>
             </div>
-        </main>
 
-        <!-- VIEW 3: IN-GAME BOARD -->
-        <main id="view-game" class="flex-1 flex flex-col justify-between py-2 hidden relative">
-            
-            <!-- Top Status Bar -->
-            <div class="bg-slate-800/60 backdrop-blur rounded-2xl p-2 px-4 flex justify-between items-center border border-slate-700/50 text-xs md:text-sm">
-                <div class="flex items-center space-x-2">
-                    <span class="text-slate-400">현재 차례:</span>
-                    <span id="turn-indicator" class="font-bold text-amber-400 bg-amber-400/10 px-3 py-1 rounded-full border border-amber-400/30">
-                        -
-                    </span>
+            <div id="form-student" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">학생 이름 / 닉네임</label>
+                    <input type="text" id="input-student-name" placeholder="예: 홍길동" maxlength="8" class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:border-amber-400 transition">
                 </div>
-                <div class="flex items-center space-x-3">
-                    <div class="text-right">
-                        <span class="text-slate-400 text-[11px] block">내 카드 수</span>
-                        <span id="my-card-count" class="font-extrabold text-lg text-emerald-400 font-mono">--장</span>
-                    </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">모둠 코드 (4자리 숫자)</label>
+                    <input type="text" id="input-room-code" inputmode="numeric" placeholder="예: 1234" maxlength="4" class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 text-center font-mono text-xl tracking-widest focus:outline-none focus:border-amber-400 transition">
                 </div>
-            </div>
-
-            <!-- Other Players Cards Area (Opponents) -->
-            <div id="opponents-container" class="grid grid-cols-2 gap-3 my-2">
-                <!-- Opponent slots dynamically generated -->
-            </div>
-
-            <!-- Center Buzzer Area -->
-            <div class="my-auto flex flex-col items-center justify-center py-4 relative">
-                <!-- Buzzer Button -->
-                <button id="buzzer-btn" onclick="pressBuzzer()" class="buzzer-btn w-36 h-36 md:w-44 md:h-44 rounded-full flex flex-col items-center justify-center text-white font-jua font-black text-2xl md:text-3xl tracking-wider cursor-pointer border-4 border-red-400/30">
-                    <i class="fa-solid fa-bell text-3xl md:text-4xl mb-1 animate-bounce"></i>
-                    <span>피타고라스!</span>
+                <button onclick="joinGameRoom()" class="w-full bg-gradient-to-r from-amber-400 to-orange-400 hover:from-amber-300 hover:to-orange-300 text-white font-bold font-jua text-lg py-3.5 rounded-xl shadow-lg shadow-orange-200 transition transform active:scale-95">
+                    게임 참가하기
                 </button>
-                
-                <!-- Toast Notification Overlay -->
-                <div id="game-toast" class="absolute top-0 bg-slate-900/95 text-amber-300 border-2 border-amber-500 px-6 py-3 rounded-2xl font-jua text-lg shadow-2xl transition-all opacity-0 pointer-events-none transform -translate-y-4">
-                    알림 메시지
-                </div>
             </div>
 
-            <!-- Current User Control Area (My Spot) -->
-            <div id="my-spot-container" class="bg-slate-800/90 border-2 border-amber-500/40 rounded-3xl p-4 shadow-xl">
-                <div class="flex items-center justify-between">
-                    <!-- Player Label & Deck Info -->
-                    <div class="flex items-center space-x-3">
-                        <div id="my-avatar" class="w-12 h-12 rounded-2xl bg-amber-500 text-slate-950 font-black text-xl flex items-center justify-center font-jua shadow-md">
-                            나
-                        </div>
-                        <div>
-                            <div class="flex items-center space-x-2">
-                                <h3 id="my-name-display" class="font-bold text-slate-100 text-base">내 이름</h3>
-                                <span id="my-turn-badge" class="hidden text-[10px] bg-amber-500 text-slate-950 font-extrabold px-2 py-0.5 rounded-full">내 차례!</span>
-                            </div>
-                            <p class="text-xs text-slate-400">잔여 카드: <span id="my-secret-count" class="font-bold text-amber-400 font-mono">--</span>장 (나만 봄)</p>
-                        </div>
-                    </div>
-
-                    <!-- Flip Card Action Button & Played Card Display -->
-                    <div class="flex items-center space-x-4">
-                        <!-- Last played card by me -->
-                        <div id="my-played-card" class="w-16 h-24 md:w-20 md:h-28 bg-slate-900 border-2 border-slate-700 rounded-xl flex flex-col items-center justify-center shadow-inner relative">
-                            <span class="text-[10px] text-slate-500 absolute top-1 left-1 font-bold">바닥</span>
-                            <span id="my-played-num" class="text-2xl md:text-3xl font-black font-mono text-slate-600">-</span>
-                        </div>
-
-                        <!-- Deck Flip Button -->
-                        <button id="btn-flip-card" onclick="flipMyCard()" disabled class="w-20 h-28 md:w-24 md:h-32 bg-gradient-to-br from-amber-500 to-amber-700 hover:from-amber-400 hover:to-amber-600 text-slate-950 font-jua font-bold text-lg rounded-2xl shadow-xl flex flex-col items-center justify-center border-2 border-amber-300 disabled:opacity-40 disabled:cursor-not-allowed transition transform active:scale-95">
-                            <i class="fa-solid fa-hand-pointer text-2xl mb-1"></i>
-                            <span>카드<br>뒤집기</span>
+            <div id="form-teacher" class="space-y-4 hidden">
+                <div class="bg-sky-50 p-4 rounded-xl border border-sky-100 text-xs text-slate-600 space-y-1">
+                    <p class="font-bold text-slate-700 mb-1"><i class="fa-solid fa-circle-info text-sky-500 mr-1"></i>3인 모둠 자동 생성 안내</p>
+                    <p>• 학급 전체 학생 수를 <b>3의 배수</b>로 입력하면 3인 모둠 코드가 생성됩니다.</p>
+                    <p>• 생성된 코드를 각 모둠에 전달해 주세요.</p>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">학급 전체 학생 수 (3의 배수)</label>
+                    <div class="flex space-x-2">
+                        <input type="number" id="input-total-students" placeholder="예: 24" step="3" min="3" max="60" class="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-mono text-lg focus:outline-none focus:border-sky-400 transition">
+                        <button onclick="generateMultipleRooms()" class="bg-sky-500 hover:bg-sky-400 text-white font-bold font-jua px-5 py-3 rounded-xl shadow-lg shadow-sky-200 transition whitespace-nowrap">
+                            모둠 생성
                         </button>
                     </div>
                 </div>
+                <div id="teacher-rooms-container" class="hidden space-y-2 pt-2 border-t border-slate-100">
+                    <label class="block text-xs font-bold text-orange-500 mb-1"><i class="fa-solid fa-list-check mr-1"></i>생성된 모둠 코드 목록 (3인 모둠)</label>
+                    <div id="teacher-rooms-list" class="grid grid-cols-2 sm:grid-cols-3 gap-2"></div>
+                </div>
             </div>
 
-        </main>
+            <div id="lobby-status" class="text-center text-xs font-bold text-rose-500 min-h-[1.25rem]"></div>
+        </div>
+    </main>
 
-        <!-- VIEW 4: GAME OVER MODAL -->
-        <div id="modal-gameover" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50 hidden">
-            <div class="w-full max-w-md bg-slate-800 border-2 border-amber-500/50 rounded-3xl p-6 text-center space-y-6 shadow-2xl">
-                <div class="space-y-2">
-                    <div class="inline-block bg-amber-500 text-slate-950 p-4 rounded-full text-3xl font-black mb-2 animate-bounce">
-                        🏆
+    <!-- VIEW 2: WAITING ROOM -->
+    <main id="view-waiting" class="flex-1 flex flex-col justify-center items-center py-6 hidden">
+        <div class="w-full max-w-md bg-white border border-amber-100 rounded-3xl p-6 shadow-xl text-center space-y-6">
+            <div>
+                <svg class="w-20 h-20 mx-auto float mb-2"><use href="#pytha"/></svg>
+                <span class="text-xs font-bold uppercase text-slate-500 tracking-wider">모둠 코드</span>
+                <div class="flex items-center justify-center mt-1">
+                    <div id="display-room-code" class="text-4xl font-mono font-black text-orange-500 tracking-widest bg-amber-50 px-6 py-2 rounded-2xl border-2 border-amber-200">----</div>
+                </div>
+                <p class="text-xs text-slate-500 mt-2">태블릿으로 위 코드를 입력하여 접속하세요.</p>
+            </div>
+
+            <div class="space-y-2 text-left">
+                <div class="flex justify-between items-center px-1">
+                    <span class="text-xs font-bold text-slate-500">참가자 목록 (<span id="waiting-count">0</span>/3)</span>
+                    <span class="text-xs text-emerald-500 animate-pulse font-semibold">대기 중...</span>
+                </div>
+                <div id="waiting-players-list" class="space-y-2"></div>
+            </div>
+
+            <div class="bg-amber-50 p-4 rounded-2xl border border-amber-100 text-left text-xs space-y-1.5 text-slate-600">
+                <p class="font-bold text-orange-500 text-sm mb-1"><i class="fa-solid fa-book-open mr-1.5"></i>게임 규칙 확인</p>
+                <p>1. 3명이 차례대로 카드를 뒤집습니다.</p>
+                <p>2. 펼쳐진 3장의 카드 숫자가 <b>피타고라스 수</b> (a² + b² = c²)가 되면 중앙 <b>버저</b>를 누르세요!</p>
+                <p>3. 가장 먼저 누르면 바닥의 카드를 모두 획득합니다.</p>
+                <p>4. 잘못 누르면 나머지 두 사람에게 카드 1장씩을 줍니다.</p>
+                <p>5. 카드가 떨어진 사람이 생기면 종료되며, 가장 카드가 많은 사람이 승리합니다!</p>
+            </div>
+
+            <button id="btn-start-game" onclick="startGame()" disabled class="w-full bg-emerald-500 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none disabled:cursor-not-allowed hover:bg-emerald-400 text-white font-bold font-jua text-lg py-3.5 rounded-xl shadow-lg shadow-emerald-200 transition">
+                게임 시작하기 (3명 필요)
+            </button>
+        </div>
+    </main>
+
+    <!-- VIEW 3: GAME BOARD -->
+    <main id="view-game" class="flex-1 flex flex-col justify-between py-2 hidden relative">
+        <div class="bg-white/80 backdrop-blur rounded-2xl p-2 px-4 flex justify-between items-center border border-amber-100 shadow-sm text-xs md:text-sm">
+            <div class="flex items-center space-x-2">
+                <span class="text-slate-500">현재 차례:</span>
+                <span id="turn-indicator" class="font-bold text-orange-600 bg-amber-100 px-3 py-1 rounded-full border border-amber-200">-</span>
+            </div>
+            <div class="text-right">
+                <span class="text-slate-500 text-[11px] block">내 카드 수</span>
+                <span id="my-card-count" class="font-extrabold text-lg text-emerald-500 font-mono">--장</span>
+            </div>
+        </div>
+
+        <!-- 할리갈리식 원형 테이블: 버저를 가운데 두고 3명이 둘러앉음 -->
+        <div class="flex-1 flex items-center justify-center my-2">
+            <div id="game-table" class="game-table relative w-full max-w-[560px] aspect-square">
+                <div class="table-felt absolute inset-[1%] rounded-[30%]"></div>
+                <div class="absolute inset-0 grid grid-cols-3" style="grid-template-rows: 36% 28% 36%;">
+                    <div id="seat-1" class="col-start-1 row-start-1 flex items-end justify-end pr-[1cqw] pb-[1cqw]"></div>
+                    <div id="seat-2" class="col-start-3 row-start-1 flex items-end justify-start pl-[1cqw] pb-[1cqw]"></div>
+                    <div class="col-start-2 row-start-2 flex items-center justify-center">
+                        <button id="buzzer-btn" onclick="pressBuzzer()" class="buzzer-btn rounded-full flex flex-col items-center justify-center text-white font-jua cursor-pointer border-4 border-white" style="width:26cqw;height:26cqw;">
+                            <i class="fa-solid fa-bell animate-bounce" style="font-size:6cqw"></i>
+                            <span style="font-size:3.6cqw" class="leading-tight">피타고라스!</span>
+                        </button>
                     </div>
-                    <h2 class="text-3xl font-jua text-amber-400">게임 종료!</h2>
-                    <p id="game-end-reason" class="text-xs text-slate-400">누군가의 카드가 모두 소진되었습니다.</p>
+                    <div id="seat-0" class="col-start-1 col-span-3 row-start-3 flex items-start justify-center pt-[1cqw]"></div>
                 </div>
-
-                <!-- Final Ranking Board -->
-                <div id="final-rankings" class="space-y-2 bg-slate-900/80 p-4 rounded-2xl border border-slate-700 text-left">
-                    <!-- Dynamic ranking items -->
+                <div id="game-toast" class="absolute left-1/2 top-[30%] -translate-x-1/2 z-20 bg-white text-orange-600 border-2 border-amber-400 px-5 py-2.5 rounded-2xl font-jua text-base md:text-lg shadow-2xl transition-all opacity-0 pointer-events-none text-center w-max max-w-[92%]">
+                    알림 메시지
                 </div>
-
-                <button onclick="location.reload()" class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-jua text-lg font-bold py-3.5 rounded-xl shadow-lg transition">
-                    처음 화면으로 돌아가기
-                </button>
             </div>
         </div>
 
-        <!-- Audio Effects (Synthesizer via Tone.js / Web Audio API native fallback) -->
-        <!-- Custom Modal for Alerts -->
-        <div id="custom-alert" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
-            <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5 max-w-xs w-full text-center space-y-4 shadow-xl">
-                <p id="custom-alert-msg" class="text-slate-200 text-sm font-semibold"></p>
-                <button onclick="closeAlert()" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded-xl text-xs transition">
-                    확인
+        <div id="my-spot-container" class="bg-white border-2 border-amber-300 rounded-3xl p-4 shadow-xl">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div id="my-avatar" class="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-300 to-orange-400 text-white font-black text-xl flex items-center justify-center font-jua shadow-md">나</div>
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <h3 id="my-name-display" class="font-bold text-slate-800 text-base">내 이름</h3>
+                            <span id="my-turn-badge" class="hidden text-[10px] bg-orange-400 text-white font-extrabold px-2 py-0.5 rounded-full animate-pulse">내 차례!</span>
+                        </div>
+                        <p class="text-xs text-slate-500">잔여 카드: <span id="my-secret-count" class="font-bold text-orange-500 font-mono">--</span>장 (나만 봄)</p>
+                    </div>
+                </div>
+                <button id="btn-flip-card" onclick="flipMyCard()" disabled class="bg-gradient-to-br from-sky-400 to-indigo-400 hover:from-sky-300 hover:to-indigo-300 text-white font-jua font-bold text-lg px-6 py-4 rounded-2xl shadow-xl shadow-sky-200 flex items-center gap-2 border-2 border-white disabled:opacity-40 disabled:cursor-not-allowed transition transform active:scale-95">
+                    <i class="fa-solid fa-hand-pointer text-xl"></i>
+                    <span>카드 뒤집기</span>
                 </button>
             </div>
         </div>
+    </main>
 
-        <footer class="text-center text-[11px] text-slate-500 py-2">
-            피타고라스를 외쳐라! • 수학 교과 연계 보드게임
-        </footer>
-
+    <!-- GAME OVER MODAL -->
+    <div id="modal-gameover" class="fixed inset-0 bg-amber-900/20 backdrop-blur-md flex items-center justify-center p-4 z-50 hidden">
+        <div class="w-full max-w-md bg-white border-2 border-amber-300 rounded-3xl p-6 text-center space-y-6 shadow-2xl">
+            <div class="space-y-2">
+                <div class="relative inline-block">
+                    <svg class="w-24 h-24 float"><use href="#pytha"/></svg>
+                    <span class="absolute -top-2 -right-3 text-4xl">🏆</span>
+                </div>
+                <h2 class="text-3xl font-jua text-orange-500">게임 종료!</h2>
+                <p id="game-end-reason" class="text-xs text-slate-500">누군가의 카드가 모두 소진되었습니다.</p>
+            </div>
+            <div id="final-rankings" class="space-y-2 bg-amber-50 p-4 rounded-2xl border border-amber-100 text-left"></div>
+            <button onclick="location.reload()" class="w-full bg-gradient-to-r from-amber-400 to-orange-400 hover:from-amber-300 hover:to-orange-300 text-white font-jua text-lg font-bold py-3.5 rounded-xl shadow-lg shadow-orange-200 transition">
+                처음 화면으로 돌아가기
+            </button>
+        </div>
     </div>
 
-    <!-- Firebase Imports Module -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { 
-            getAuth, 
-            signInAnonymously, 
-            signInWithCustomToken, 
-            onAuthStateChanged 
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { 
-            getFirestore, 
-            doc, 
-            setDoc, 
-            getDoc, 
-            updateDoc, 
-            onSnapshot, 
-            collection 
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    <!-- CUSTOM ALERT -->
+    <div id="custom-alert" class="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white border border-amber-100 rounded-2xl p-5 max-w-xs w-full text-center space-y-4 shadow-xl">
+            <svg class="w-14 h-14 mx-auto"><use href="#pytha"/></svg>
+            <p id="custom-alert-msg" class="text-slate-700 text-sm font-semibold whitespace-pre-line"></p>
+            <button onclick="closeAlert()" class="w-full bg-amber-400 hover:bg-amber-300 text-slate-900 font-bold py-2 rounded-xl text-xs transition">확인</button>
+        </div>
+    </div>
 
-        // Global state and App configurations
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'pythagoras-halli-galli';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' 
-            ? JSON.parse(__firebase_config) 
-            : { apiKey: "demo", authDomain: "demo.firebaseapp.com", projectId: "demo" };
+    <footer class="text-center text-xs text-slate-400 py-3">
+        zyoont. All rights reserved.
+    </footer>
+</div>
 
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import {
+        getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged,
+        setPersistence, browserSessionPersistence
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import {
+        getFirestore, doc, setDoc, getDoc, onSnapshot, runTransaction
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // State Variables
-        let currentUser = null;
-        let roomCode = null;
-        let isTeacher = false;
-        let roomUnsubscribe = null;
-        let gameState = null;
-        let audioCtx = null;
+    // Firebase 프로젝트 설정 (pytha-number)
+    const MY_FIREBASE_CONFIG = {
+        apiKey: "AIzaSyCI236KtsM4M4pQlajGo-Dv2nsTrN_i0UQ",
+        authDomain: "pytha-number.firebaseapp.com",
+        projectId: "pytha-number",
+        storageBucket: "pytha-number.firebasestorage.app",
+        messagingSenderId: "190103398825",
+        appId: "1:190103398825:web:902a606ba76405a5477cb8"
+    };
 
-        // Base 24 Card Deck Preset as specified by prompt:
-        // [3,4,5,5,6,7,8,8,9,10,10,12,12,13,15,15,15,17,20,24,24,25,25,26]
-        const CARD_DECK_PRESET = [3, 4, 5, 5, 6, 7, 8, 8, 9, 10, 10, 12, 12, 13, 15, 15, 15, 17, 20, 24, 24, 25, 25, 26];
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'pythagoras-halli-galli';
+    const firebaseConfig = typeof __firebase_config !== 'undefined'
+        ? JSON.parse(__firebase_config)
+        : MY_FIREBASE_CONFIG;
+    const CONFIG_MISSING = !firebaseConfig.apiKey || firebaseConfig.apiKey.startsWith('YOUR_');
 
-        // Robust Async Auth Helper with guaranteed fallback
-        async function ensureAuth() {
-            if (currentUser && currentUser.uid) {
-                return currentUser;
-            }
-            if (auth.currentUser) {
-                currentUser = auth.currentUser;
-                return currentUser;
-            }
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
 
-            try {
-                let userCred;
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    userCred = await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    userCred = await signInAnonymously(auth);
-                }
-                currentUser = userCred.user;
-                return currentUser;
-            } catch (err) {
-                console.warn("Firebase Auth fallback activated:", err);
-                // Create a guaranteed local mock user if network/auth issues happen
-                currentUser = {
-                    uid: 'user_' + Math.random().toString(36).substring(2, 9),
-                    isAnonymous: true
-                };
-                return currentUser;
-            }
+    // 탭마다 별도 익명 사용자 → 한 컴퓨터에서 여러 탭으로 테스트 가능
+    const persistenceReady = setPersistence(auth, browserSessionPersistence).catch(() => {});
+
+    let currentUser = null;
+    let roomCode = null;
+    let isObserver = false;
+    let roomUnsubscribe = null;
+    let gameState = null;
+    let audioCtx = null;
+    let lastEventId = null;
+    let firstSnapshot = true;
+    let busy = false;
+
+    const CARD_DECK_PRESET = [3, 4, 5, 5, 6, 7, 8, 8, 9, 10, 10, 12, 12, 13, 15, 15, 15, 17, 20, 24, 24, 25, 25, 26];
+    const roomRef = (code) => doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code);
+
+    // ---------- 공통 유틸 ----------
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const topCard = (p) => (p.pile && p.pile.length) ? p.pile[p.pile.length - 1] : null;
+    const totalCards = (p) => (p.deck?.length || 0) + (p.pile?.length || 0);
+
+    function showAlert(msg) { $('custom-alert-msg').innerText = msg; $('custom-alert').classList.remove('hidden'); }
+    window.closeAlert = () => $('custom-alert').classList.add('hidden');
+
+    function showView(viewId) {
+        ['view-lobby', 'view-waiting', 'view-game'].forEach(id => $(id).classList.toggle('hidden', id !== viewId));
+    }
+
+    let toastTimer = null;
+    function showToast(text) {
+        const t = $('game-toast');
+        t.innerText = text;
+        t.classList.add('toast-show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => t.classList.remove('toast-show'), 1800);
+    }
+
+    function isPythagoreanTriple(a, b, c) {
+        if ([a, b, c].some(v => typeof v !== 'number')) return false;
+        const arr = [a, b, c].sort((x, y) => x - y);
+        return arr[0] * arr[0] + arr[1] * arr[1] === arr[2] * arr[2];
+    }
+
+    function shuffle(array) {
+        const r = [...array];
+        for (let i = r.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [r[i], r[j]] = [r[j], r[i]];
         }
+        return r;
+    }
 
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                currentUser = user;
+    function withTimeout(promise, ms = 6000) {
+        return Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error('Timeout')), ms))]);
+    }
+
+    function explainError(err) {
+        const code = String(err?.code || '') + ' ' + String(err?.message || '');
+        if (CONFIG_MISSING) return "Firebase 설정이 비어 있습니다.\n코드 상단의 MY_FIREBASE_CONFIG에 본인 프로젝트 설정을 넣어 주세요.";
+        if (code.includes('permission-denied') || code.includes('insufficient permissions')) return "Firestore 보안 규칙 때문에 거부되었습니다.\nFirestore → 규칙에서 로그인한 사용자의 읽기/쓰기를 허용해 주세요.";
+        if (code.includes('admin-restricted') || code.includes('operation-not-allowed')) return "Firebase 콘솔 → Authentication → 로그인 방법에서\n'익명'을 사용 설정해 주세요.";
+        if (code.includes('configuration-not-found')) return "Firebase 콘솔 → Authentication에서 '시작하기'를 누른 뒤\n'익명' 로그인을 사용 설정해 주세요.";
+        if (code.includes('api-key-not-valid') || code.includes('invalid-api-key')) return "Firebase API 키가 올바르지 않습니다.\nMY_FIREBASE_CONFIG 값을 다시 확인해 주세요.";
+        if (code.includes('not-found') || code.includes('does not exist')) return "Firestore 데이터베이스가 아직 없습니다.\nFirebase 콘솔 → Firestore Database → 데이터베이스 만들기를 진행해 주세요.";
+        if (code.includes('network-request-failed') || code.includes('Timeout') || code.includes('unavailable') || code.includes('offline'))
+            return "서버에 연결되지 않습니다.\n인터넷 연결과 Firestore 데이터베이스 생성 여부를 확인해 주세요.";
+        return "오류가 발생했습니다. 잠시 후 다시 시도해 주세요.\n(" + code.trim() + ")";
+    }
+
+    // 예상치 못한 오류도 화면에 안내 (흰 화면/무반응 방지)
+    window.addEventListener('unhandledrejection', (e) => { console.error(e.reason); showAlert(explainError(e.reason)); });
+
+    // ---------- 인증 ----------
+    async function ensureAuth() {
+        if (currentUser) return currentUser;
+        await persistenceReady;
+        if (auth.currentUser) return (currentUser = auth.currentUser);
+        const cred = (typeof __initial_auth_token !== 'undefined' && __initial_auth_token)
+            ? await signInWithCustomToken(auth, __initial_auth_token)
+            : await signInAnonymously(auth);
+        return (currentUser = cred.user);
+    }
+    onAuthStateChanged(auth, (u) => { if (u) currentUser = u; });
+    if (CONFIG_MISSING) {
+        $('lobby-status').innerText = "⚠ Firebase 설정이 필요합니다 (코드 상단 MY_FIREBASE_CONFIG)";
+    } else {
+        ensureAuth().catch(err => { $('lobby-status').innerText = explainError(err); });
+    }
+
+    // ---------- 사운드 ----------
+    function playSound(type) {
+        try {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            const now = audioCtx.currentTime;
+            if (type === 'flip') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(400, now);
+                osc.frequency.exponentialRampToValueAtTime(800, now + 0.08);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+                osc.start(now); osc.stop(now + 0.08);
+            } else if (type === 'win') {
+                osc.type = 'triangle';
+                [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => osc.frequency.setValueAtTime(f, now + i * 0.1));
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+                osc.start(now); osc.stop(now + 0.8);
+            } else if (type === 'wrong') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(180, now);
+                osc.frequency.linearRampToValueAtTime(110, now + 0.3);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+                osc.start(now); osc.stop(now + 0.35);
             }
-        });
+        } catch (e) { /* 소리 실패는 무시 */ }
+    }
 
-        // Initialize Auth immediately on script load
-        ensureAuth();
+    // ---------- 로비 ----------
+    window.switchRoleTab = function (role) {
+        const s = role === 'student';
+        $('tab-student').className = "py-2.5 rounded-lg text-sm font-bold transition-all " + (s ? "bg-amber-400 text-slate-900 shadow" : "text-slate-500 hover:text-slate-700");
+        $('tab-teacher').className = "py-2.5 rounded-lg text-sm font-bold transition-all " + (!s ? "bg-sky-500 text-white shadow" : "text-slate-500 hover:text-slate-700");
+        $('form-student').classList.toggle('hidden', !s);
+        $('form-teacher').classList.toggle('hidden', s);
+    };
 
-        // View Navigation Helper
-        function showView(viewId) {
-            ['view-lobby', 'view-waiting', 'view-game'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) {
-                    if (id === viewId) el.classList.remove('hidden');
-                    else el.classList.add('hidden');
-                }
-            });
-        }
+    window.joinGameRoom = async function () {
+        const name = $('input-student-name').value.trim();
+        const code = $('input-room-code').value.trim();
+        if (!name) return showAlert("학생 이름을 입력해 주세요.");
+        if (!/^\d{4}$/.test(code)) return showAlert("4자리 모둠 코드를 정확히 입력해 주세요.");
+        if (CONFIG_MISSING) return showAlert(explainError());
 
-        // Student Join Game Function
-        window.joinGameRoom = async function() {
-            const nameInput = document.getElementById('input-student-name').value.trim();
-            const codeInput = document.getElementById('input-room-code').value.trim();
-
-            if (!nameInput) {
-                return showAlert("학생 이름을 입력해 주세요.");
-            }
-            if (!codeInput || codeInput.length !== 4) {
-                return showAlert("4자리 모둠 코드를 정확히 입력해 주세요.");
-            }
-
-            const statusEl = document.getElementById('lobby-status');
-            statusEl.innerText = "모둠에 접속하는 중입니다...";
-
-            const user = await ensureAuth();
-
-            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', codeInput);
-            try {
-                const snap = await getDoc(roomRef);
-                if (!snap.exists()) {
-                    statusEl.innerText = "";
-                    return showAlert("존재하지 않는 모둠 코드입니다. 코드를 다시 확인해 주세요.");
-                }
-
+        const statusEl = $('lobby-status');
+        statusEl.innerText = "모둠에 접속하는 중입니다...";
+        try {
+            const user = await withTimeout(ensureAuth());
+            await withTimeout(runTransaction(db, async (tx) => {
+                const snap = await tx.get(roomRef(code));
+                if (!snap.exists()) throw new Error('NO_ROOM');
                 const data = snap.data();
-                if (data.status !== 'waiting') {
-                    statusEl.innerText = "";
-                    return showAlert("이미 게임이 진행 중이거나 종료된 모둠입니다.");
-                }
+                const players = data.players || [];
+                const me = players.find(p => p.uid === user.uid);
+                if (me) { me.name = name; tx.update(roomRef(code), { players }); return; }
+                if (data.status !== 'waiting') throw new Error('STARTED');
+                if (players.length >= (data.capacity || 3)) throw new Error('FULL');
+                players.push({ uid: user.uid, name, deck: [], pile: [] });
+                tx.update(roomRef(code), { players });
+            }));
 
-                let players = data.players || [];
-                const existingPlayerIdx = players.findIndex(p => p.uid === user.uid);
-
-                if (existingPlayerIdx === -1) {
-                    if (players.length >= (data.capacity || 3)) {
-                        statusEl.innerText = "";
-                        return showAlert("해당 모둠의 인원이 이미 가득 찼습니다. (최대 3명)");
-                    }
-
-                    players.push({
-                        uid: user.uid,
-                        name: nameInput,
-                        deck: [],
-                        currentCard: null
-                    });
-
-                    await updateDoc(roomRef, { players });
-                }
-
-                statusEl.innerText = "";
-                enterWaitingRoom(codeInput, false);
-                subscribeToRoom(codeInput);
-
-                // Set player name tag
-                const nameTag = document.getElementById('player-name-tag');
-                const userBadge = document.getElementById('user-badge');
-                if (nameTag && userBadge) {
-                    nameTag.innerText = nameInput;
-                    userBadge.classList.remove('hidden');
-                }
-
-            } catch (err) {
-                console.error("Join room error:", err);
-                statusEl.innerText = "";
-                showAlert("모둠 접속 중 오류가 발생했습니다. 다시 시도해 주세요.");
-            }
-        };
-
-        // Render Generated Teacher Rooms List (Grid format without scroll)
-        function renderTeacherRoomList(rooms) {
-            const container = document.getElementById('teacher-rooms-container');
-            const listEl = document.getElementById('teacher-rooms-list');
-            
-            if (!container || !listEl) return;
-            
-            listEl.innerHTML = '';
-            rooms.forEach((r, idx) => {
-                const card = document.createElement('div');
-                card.className = "bg-slate-900 border border-slate-700 hover:border-amber-500/50 p-2.5 rounded-xl flex flex-col justify-between shadow transition";
-                card.innerHTML = `
-                    <div class="flex items-center justify-between mb-1">
-                        <span class="text-[11px] font-bold text-slate-400">모둠 ${idx + 1}</span>
-                        <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-bold">3인 전용</span>
-                    </div>
-                    <div class="text-center font-mono font-black text-amber-400 text-xl tracking-widest my-1">
-                        ${r.code}
-                    </div>
-                    <button onclick="enterAsObserver('${r.code}')" class="mt-1 w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs py-1.5 rounded-lg border border-slate-600 transition flex items-center justify-center space-x-1">
-                        <i class="fa-solid fa-eye text-[10px]"></i>
-                        <span>관전하기</span>
-                    </button>
-                `;
-                listEl.appendChild(card);
-            });
-
-            container.classList.remove('hidden');
-        }
-
-        // Room Realtime Subscription
-        function subscribeToRoom(code) {
-            if (roomUnsubscribe) roomUnsubscribe();
-            
-            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code);
-            roomUnsubscribe = onSnapshot(roomRef, (snap) => {
-                if (snap.exists()) {
-                    gameState = snap.data();
-                    renderRoomState(gameState);
-                }
-            }, (error) => {
-                console.error("Room sync error:", error);
-            });
-        }
-
-        // Enter Waiting Room UI setup
-        function enterWaitingRoom(code, isObs = false) {
-            roomCode = code;
-            showView('view-waiting');
-            document.getElementById('display-room-code').innerText = code;
-            document.getElementById('room-info-display').innerText = `모둠 코드: ${code} ${isObs ? '(관전 중)' : ''}`;
-        }
-
-        // Enter as Observer (Teacher View)
-        window.enterAsObserver = async function(code) {
-            await ensureAuth();
-            enterWaitingRoom(code, true);
+            statusEl.innerText = "";
+            isObserver = false;
+            enterWaitingRoom(code);
             subscribeToRoom(code);
-        };
-
-        // Helper: Check if 3 numbers form a Pythagorean Triple (a^2 + b^2 = c^2)
-        function isPythagoreanTriple(a, b, c) {
-            const arr = [a, b, c].sort((x, y) => x - y);
-            return (arr[0] * arr[0] + arr[1] * arr[1]) === (arr[2] * arr[2]);
+            $('player-name-tag').innerText = name;
+            $('user-badge').classList.remove('hidden');
+        } catch (err) {
+            statusEl.innerText = "";
+            const m = err.message;
+            if (m === 'NO_ROOM') showAlert("존재하지 않는 모둠 코드입니다. 코드를 다시 확인해 주세요.");
+            else if (m === 'STARTED') showAlert("이미 게임이 진행 중이거나 종료된 모둠입니다.");
+            else if (m === 'FULL') showAlert("해당 모둠의 인원이 이미 가득 찼습니다. (최대 3명)");
+            else { console.error(err); showAlert(explainError(err)); }
         }
+    };
 
-        // Helper: Array Shuffle Function
-        function shuffle(array) {
-            const result = [...array];
-            for (let i = result.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [result[i], result[j]] = [result[j], result[i]];
-            }
-            return result;
-        }
+    window.generateMultipleRooms = async function () {
+        const total = parseInt($('input-total-students').value, 10);
+        if (isNaN(total) || total < 3) return showAlert("최소 3명 이상의 학생 수를 입력해 주세요.");
+        if (total % 3 !== 0) return showAlert("3의 배수로 입력해 주세요. (예: 3, 6, 9, 12, 15, 24, 27명 등)");
+        if (total > 60) return showAlert("최대 60명까지 생성할 수 있습니다.");
+        if (CONFIG_MISSING) return showAlert(explainError());
 
-        // Custom Alert Helper
-        function showAlert(msg) {
-            const modal = document.getElementById('custom-alert');
-            const msgEl = document.getElementById('custom-alert-msg');
-            if (modal && msgEl) {
-                msgEl.innerText = msg;
-                modal.classList.remove('hidden');
-            }
-        }
-
-        window.closeAlert = function() {
-            const modal = document.getElementById('custom-alert');
-            if (modal) modal.classList.add('hidden');
-        };
-
-        // Sound FX using Web Audio API
-        function playSound(type) {
-            try {
-                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                if (audioCtx.state === 'suspended') audioCtx.resume();
-
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-
-                const now = audioCtx.currentTime;
-
-                if (type === 'flip') {
-                    osc.type = 'sine';
-                    osc.frequency.setValueAtTime(400, now);
-                    osc.frequency.exponentialRampToValueAtTime(800, now + 0.08);
-                    gain.gain.setValueAtTime(0.15, now);
-                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
-                    osc.start(now);
-                    osc.stop(now + 0.08);
-                } else if (type === 'bell_win') {
-                    osc.type = 'triangle';
-                    osc.frequency.setValueAtTime(523.25, now);
-                    osc.frequency.setValueAtTime(659.25, now + 0.1);
-                    osc.frequency.setValueAtTime(783.99, now + 0.2);
-                    osc.frequency.setValueAtTime(1046.50, now + 0.3);
-                    gain.gain.setValueAtTime(0.3, now);
-                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
-                    osc.start(now);
-                    osc.stop(now + 0.8);
-                } else if (type === 'bell_wrong') {
-                    osc.type = 'sawtooth';
-                    osc.frequency.setValueAtTime(180, now);
-                    osc.frequency.linearRampToValueAtTime(110, now + 0.3);
-                    gain.gain.setValueAtTime(0.3, now);
-                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
-                    osc.start(now);
-                    osc.stop(now + 0.35);
+        const statusEl = $('lobby-status');
+        statusEl.innerText = "모둠 코드를 생성하는 중입니다...";
+        const created = [];
+        try {
+            await withTimeout(ensureAuth());
+            const used = new Set();
+            for (let i = 0; i < total / 3; i++) {
+                let code;
+                for (let tries = 0; tries < 20; tries++) {
+                    code = String(Math.floor(1000 + Math.random() * 9000));
+                    if (used.has(code)) continue;
+                    const snap = await withTimeout(getDoc(roomRef(code)));
+                    if (!snap.exists() || snap.data().status === 'finished') break;
                 }
-            } catch(e) {
-                console.log("Audio play error", e);
+                used.add(code);
+                await withTimeout(setDoc(roomRef(code), {
+                    roomCode: code, capacity: 3, status: 'waiting', players: [],
+                    turnIndex: 0, version: 0, lastEvent: null, endReason: null, createdAt: Date.now()
+                }));
+                created.push(code);
+            }
+            statusEl.innerText = "";
+            renderTeacherRoomList(created);
+        } catch (err) {
+            console.error(err);
+            statusEl.innerText = "";
+            if (created.length) renderTeacherRoomList(created);
+            showAlert(explainError(err));
+        }
+    };
+
+    function renderTeacherRoomList(codes) {
+        $('teacher-rooms-list').innerHTML = codes.map((code, idx) => `
+            <div class="bg-white border-2 border-amber-100 hover:border-amber-300 p-2.5 rounded-xl flex flex-col justify-between shadow-sm transition">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-[11px] font-bold text-slate-500">모둠 ${idx + 1}</span>
+                    <span class="text-[10px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded font-bold">3인 전용</span>
+                </div>
+                <div class="text-center font-mono font-black text-orange-500 text-xl tracking-widest my-1">${code}</div>
+                <button onclick="enterAsObserver('${code}')" class="mt-1 w-full bg-sky-50 hover:bg-sky-100 text-sky-600 font-bold text-xs py-1.5 rounded-lg border border-sky-200 transition flex items-center justify-center space-x-1">
+                    <i class="fa-solid fa-eye text-[10px]"></i><span>관전하기</span>
+                </button>
+            </div>`).join('');
+        $('teacher-rooms-container').classList.remove('hidden');
+    }
+
+    window.enterAsObserver = async function (code) {
+        try { await withTimeout(ensureAuth()); } catch (e) { return showAlert(explainError(e)); }
+        isObserver = true;
+        enterWaitingRoom(code);
+        subscribeToRoom(code);
+    };
+
+    function enterWaitingRoom(code) {
+        roomCode = code;
+        showView('view-waiting');
+        $('display-room-code').innerText = code;
+        $('room-info-display').innerText = `모둠 코드: ${code}${isObserver ? ' (관전 중)' : ''}`;
+    }
+
+    function subscribeToRoom(code) {
+        if (roomUnsubscribe) roomUnsubscribe();
+        firstSnapshot = true; lastEventId = null;
+        roomUnsubscribe = onSnapshot(roomRef(code), (snap) => {
+            if (!snap.exists()) return;
+            gameState = snap.data();
+            renderRoomState(gameState);
+        }, (err) => { console.error(err); showAlert(explainError(err)); });
+    }
+
+    // ---------- 화면 렌더링 ----------
+    function renderRoomState(s) {
+        const players = s.players || [];
+        const myIdx = players.findIndex(p => p.uid === currentUser?.uid);
+
+        if (s.lastEvent && s.lastEvent.id !== lastEventId) {
+            lastEventId = s.lastEvent.id;
+            if (!firstSnapshot) {
+                if (s.lastEvent.type === 'flip') playSound('flip');
+                else { playSound(s.lastEvent.type); showToast(s.lastEvent.text); }
             }
         }
 
-        // Role Tab Switch (Student vs Teacher)
-        window.switchRoleTab = function(role) {
-            const tabStudent = document.getElementById('tab-student');
-            const tabTeacher = document.getElementById('tab-teacher');
-            const formStudent = document.getElementById('form-student');
-            const formTeacher = document.getElementById('form-teacher');
+        firstSnapshot = false;
 
-            if (role === 'student') {
-                tabStudent.className = "py-2.5 rounded-lg text-sm font-bold transition-all bg-amber-500 text-slate-950 shadow";
-                tabTeacher.className = "py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-slate-200 transition-all";
-                formStudent.classList.remove('hidden');
-                formTeacher.classList.add('hidden');
-                isTeacher = false;
+        if (s.status === 'waiting') {
+            showView('view-waiting');
+            $('waiting-count').innerText = players.length;
+            $('waiting-players-list').innerHTML = [0, 1, 2].map(i => {
+                const p = players[i];
+                if (!p) return `<div class="p-3 rounded-xl border-2 border-dashed border-slate-200 text-slate-400 text-sm">빈 자리</div>`;
+                return `<div class="p-3 rounded-xl bg-amber-50 border-2 ${i === myIdx ? 'border-amber-400' : 'border-amber-100'} flex justify-between items-center">
+                    <span class="font-bold text-sm text-slate-700">${esc(p.name)}${i === myIdx ? ' (나)' : ''}</span>
+                    ${i === 0 ? '<span class="text-[10px] bg-sky-100 text-sky-600 px-2 py-0.5 rounded-full font-bold">방장</span>' : ''}
+                </div>`;
+            }).join('');
+
+            const canStart = players.length === 3 && (myIdx === 0 || isObserver);
+            const btn = $('btn-start-game');
+            btn.disabled = !canStart;
+            btn.innerText = players.length < 3 ? `게임 시작하기 (${3 - players.length}명 더 필요)`
+                : canStart ? '게임 시작하기!' : '방장이 시작하기를 기다리는 중...';
+            return;
+        }
+
+        showView('view-game');
+        renderGame(s, myIdx);
+        if (s.status === 'finished') renderGameOver(s);
+    }
+
+    // 이전 화면의 맨 위 카드 기억 → 새로 뒤집힌 카드만 애니메이션
+    const prevTops = {};
+
+    function pileHTML(p) {
+        const t = topCard(p);
+        if (t === null) return `<div class="card-empty">바닥</div>`;
+        const n = p.pile.length;
+        const anim = prevTops[p.uid] !== n ? 'flip-in' : '';
+        const under = n >= 3 ? `<div class="pile-under" style="transform:translate(1.2cqw,1.2cqw) rotate(6deg)"></div>` : '';
+        const under2 = n >= 2 ? `<div class="pile-under" style="transform:translate(0.6cqw,0.6cqw) rotate(-4deg)"></div>` : '';
+        return `<div class="relative" style="width:14cqw;height:20cqw">${under}${under2}
+            <div class="card-face ${anim}"><span class="corner tl">${t}</span>${t}<span class="corner br">${t}</span></div></div>`;
+    }
+
+    function deckHTML(p, clickable) {
+        const n = p.deck.length;
+        if (n === 0) return `<div class="card-back empty">카드<br>없음</div>`;
+        return `<div class="card-back ${clickable ? 'clickable' : ''}" ${clickable ? 'onclick="flipMyCard()"' : ''}>
+            ${clickable ? '탭해서<br>뒤집기' : 'a²+b²<br>=c²'}<span class="deck-count">${n}</span></div>`;
+    }
+
+    function labelHTML(p, isTurn, isMe) {
+        return `<div class="seat-label ${isTurn ? 'turn' : ''}">${isTurn ? '▶ ' : ''}${esc(p.name)}${isMe ? ' (나)' : ''}</div>`;
+    }
+
+    function renderGame(s, myIdx) {
+        const players = s.players;
+        const me = players[myIdx];
+        const playing = s.status === 'playing';
+        const base = myIdx >= 0 ? myIdx : 0;   // 관전자는 1번 학생을 아래쪽에 둠
+
+        $('turn-indicator').innerText = players[s.turnIndex] ? players[s.turnIndex].name + (s.turnIndex === myIdx ? ' (나)' : '') : '-';
+
+        // rel 0 = 아래(나), rel 1 = 왼쪽 위, rel 2 = 오른쪽 위
+        for (let rel = 0; rel < 3; rel++) {
+            const i = (base + rel) % players.length;
+            const p = players[i];
+            const seat = $('seat-' + rel);
+            if (!p) { seat.innerHTML = ''; continue; }
+            const isTurn = playing && i === s.turnIndex;
+            const isMe = i === myIdx;
+            const canFlip = isMe && isTurn && p.deck.length > 0;
+            const pile = pileHTML(p), deck = deckHTML(p, canFlip), label = labelHTML(p, isTurn, isMe);
+
+            if (rel === 0) {
+                seat.innerHTML = `<div class="flex flex-col items-center" style="gap:1.6cqw">
+                    <div class="flex items-center" style="gap:3cqw">${pile}<div>${deck}</div></div>${label}</div>`;
+            } else if (rel === 1) {
+                seat.innerHTML = `<div class="flex flex-col items-start" style="gap:1.6cqw">${label}
+                    <div class="flex items-end" style="gap:2.5cqw"><div style="transform:rotate(-8deg)">${deck}</div>
+                    <div style="transform:translateY(3cqw) rotate(10deg)">${pile}</div></div></div>`;
             } else {
-                tabTeacher.className = "py-2.5 rounded-lg text-sm font-bold transition-all bg-indigo-600 text-white shadow";
-                tabStudent.className = "py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-slate-200 transition-all";
-                formTeacher.classList.remove('hidden');
-                formStudent.classList.add('hidden');
-                isTeacher = true;
+                seat.innerHTML = `<div class="flex flex-col items-end" style="gap:1.6cqw">${label}
+                    <div class="flex items-end" style="gap:2.5cqw"><div style="transform:translateY(3cqw) rotate(-10deg)">${pile}</div>
+                    <div style="transform:rotate(8deg)">${deck}</div></div></div>`;
             }
-        };
+        }
+        players.forEach(p => { prevTops[p.uid] = p.pile.length; });
 
-        // Teacher: Auto Generate 3-Player Rooms Only
-        window.generateMultipleRooms = async function() {
-            const totalCountInput = document.getElementById('input-total-students').value;
-            const total = parseInt(totalCountInput, 10);
+        $('buzzer-btn').disabled = !me || !playing;
 
-            if (isNaN(total) || total < 3) {
-                return showAlert("최소 3명 이상의 학생 수를 입력해 주세요.");
-            }
+        $('my-spot-container').classList.toggle('hidden', !me);
+        if (!me) { $('my-card-count').innerText = '관전'; return; }
 
-            if (total % 3 !== 0) {
-                return showAlert("3의 배수로 입력해 주세요. (예: 3, 6, 9, 12, 15, 24, 27명 등)");
-            }
+        const myTurn = playing && s.turnIndex === myIdx;
+        $('my-name-display').innerText = me.name;
+        $('my-avatar').innerText = me.name.slice(0, 1);
+        $('my-turn-badge').classList.toggle('hidden', !myTurn);
+        $('my-secret-count').innerText = me.deck.length;
+        $('my-card-count').innerText = me.deck.length + '장';
+        $('btn-flip-card').disabled = !myTurn || me.deck.length === 0;
+    }
 
-            const statusEl = document.getElementById('lobby-status');
-            statusEl.innerText = "모둠 코드를 생성하는 중입니다...";
+    function renderGameOver(s) {
+        const ranked = s.players.map(p => ({ name: p.name, uid: p.uid, n: totalCards(p) })).sort((a, b) => b.n - a.n);
+        const medals = ['🥇', '🥈', '🥉'];
+        $('game-end-reason').innerText = s.endReason || '게임이 종료되었습니다.';
+        $('final-rankings').innerHTML = ranked.map((r, i) => `
+            <div class="flex justify-between items-center p-2 rounded-xl ${i === 0 ? 'bg-white border-2 border-amber-300' : ''}">
+                <span class="font-bold text-slate-700">${medals[i] || ''} ${esc(r.name)}${r.uid === currentUser?.uid ? ' (나)' : ''}</span>
+                <span class="font-mono font-black text-orange-500">${r.n}장</span>
+            </div>`).join('');
+        $('modal-gameover').classList.remove('hidden');
+    }
 
-            const groupCount = total / 3;
-            const createdRooms = [];
+    // ---------- 게임 로직 (모두 트랜잭션으로 처리) ----------
+    function endIfNeeded(s) {
+        const cur = s.players[s.turnIndex];
+        if (cur && cur.deck.length === 0) {
+            s.status = 'finished';
+            s.endReason = `${cur.name} 님의 카드가 모두 소진되었습니다.`;
+        }
+    }
 
-            // Helper with timeout to prevent hanging on network issues
-            const withTimeout = (promise, ms = 2500) => {
-                return Promise.race([
-                    promise,
-                    new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), ms))
-                ]);
-            };
+    function newEvent(type, text) {
+        return { id: Date.now() + '_' + Math.random().toString(36).slice(2, 7), type, text };
+    }
 
-            try {
-                // Ensure auth attempt without blocking indefinitely
-                await withTimeout(ensureAuth(), 2000).catch(() => null);
-
-                for (let i = 0; i < groupCount; i++) {
-                    const code = Math.floor(1000 + Math.random() * 9000).toString();
-                    const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code);
-
-                    const initialRoomData = {
-                        roomCode: code,
-                        capacity: 3,
-                        status: 'waiting',
-                        players: [],
-                        turnIndex: 0,
-                        tableCards: [],
-                        winner: null,
-                        createdAt: Date.now()
-                    };
-
-                    // Try writing to DB, fallback gracefully if network is slow
-                    await withTimeout(setDoc(roomRef, initialRoomData), 2500).catch(err => {
-                        console.warn(`Room ${code} generated with local fallback:`, err);
+    async function runAction(fn) {
+        if (busy || !roomCode) return;
+        busy = true;
+        try {
+            const msg = await runTransaction(db, async (tx) => {
+                const snap = await tx.get(roomRef(roomCode));
+                if (!snap.exists()) return null;
+                const s = snap.data();
+                const result = fn(s);
+                if (result && result.write) {
+                    tx.update(roomRef(roomCode), {
+                        players: s.players, turnIndex: s.turnIndex, status: s.status,
+                        version: (s.version || 0) + 1, lastEvent: s.lastEvent, endReason: s.endReason || null
                     });
-
-                    createdRooms.push({ code, capacity: 3 });
                 }
+                return result ? result.msg : null;
+            });
+            if (msg) showToast(msg);
+        } catch (err) {
+            console.error(err);
+            showAlert(explainError(err));
+        } finally {
+            busy = false;
+        }
+    }
 
-                statusEl.innerText = "";
-                renderTeacherRoomList(createdRooms);
-            } catch (err) {
-                console.error("Error creating rooms:", err);
-                statusEl.innerText = "";
-                // Even on overall error, render created rooms so teacher isn't blocked
-                if (createdRooms.length > 0) {
-                    renderTeacherRoomList(createdRooms);
+    window.startGame = () => runAction((s) => {
+        if (s.status !== 'waiting' || (s.players || []).length !== 3) return null;
+        const deck = shuffle(CARD_DECK_PRESET);
+        s.players = s.players.map((p, i) => ({ ...p, deck: deck.filter((_, k) => k % 3 === i), pile: [] }));
+        s.status = 'playing';
+        s.turnIndex = 0;
+        s.lastEvent = newEvent('start', '게임 시작!');
+        return { write: true };
+    });
+
+    window.flipMyCard = () => runAction((s) => {
+        const idx = s.players.findIndex(p => p.uid === currentUser.uid);
+        if (s.status !== 'playing' || idx !== s.turnIndex) return null;
+        const p = s.players[idx];
+        if (!p.deck.length) return null;
+        p.pile.push(p.deck.shift());
+        s.turnIndex = (idx + 1) % s.players.length;
+        s.lastEvent = newEvent('flip', '');
+        endIfNeeded(s);
+        return { write: true };
+    });
+
+    window.pressBuzzer = () => {
+        if (!gameState) return;
+        const seenVersion = gameState.version || 0;
+        runAction((s) => {
+            const idx = s.players.findIndex(p => p.uid === currentUser.uid);
+            if (s.status !== 'playing' || idx === -1) return null;
+            if ((s.version || 0) !== seenVersion) return { write: false, msg: '카드가 바뀌었어요! 다시 확인하고 누르세요.' };
+
+            const me = s.players[idx];
+            const tops = s.players.map(topCard);
+            if (isPythagoreanTriple(...tops)) {
+                const won = s.players.flatMap(p => p.pile);
+                s.players.forEach(p => { p.pile = []; });
+                me.deck = me.deck.concat(shuffle(won));
+                const [a, b, c] = [...tops].sort((x, y) => x - y);
+                s.lastEvent = newEvent('win', `🎉 ${me.name} 정답! ${a}²+${b}²=${c}² (+${won.length}장)`);
+                endIfNeeded(s);
+            } else {
+                s.players.forEach((p, j) => {
+                    if (j !== idx && me.deck.length > 0) p.deck.push(me.deck.pop());
+                });
+                s.lastEvent = newEvent('wrong', `❌ ${me.name} 땡! 카드 1장씩 나눠줍니다.`);
+                if (me.deck.length === 0) {
+                    s.status = 'finished';
+                    s.endReason = `${me.name} 님의 카드가 모두 소진되었습니다.`;
                 } else {
-                    showAlert("모둠 코드를 다시 시도해 주세요.");
+                    endIfNeeded(s);
                 }
             }
-        };
-
-        // Render Room State dynamically
-<!-- ... existing code -->
+            return { write: true };
+        });
+    };
+</script>
+</body>
+</html>
