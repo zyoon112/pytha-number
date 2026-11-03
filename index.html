@@ -342,9 +342,12 @@
         // [3,4,5,5,6,7,8,8,9,10,10,12,12,13,15,15,15,17,20,24,24,25,25,26]
         const CARD_DECK_PRESET = [3, 4, 5, 5, 6, 7, 8, 8, 9, 10, 10, 12, 12, 13, 15, 15, 15, 17, 20, 24, 24, 25, 25, 26];
 
-        // Ensure Auth Helper
+        // Ensure Auth Helper (Improved Async Auth handling)
         async function ensureAuth() {
-            if (currentUser) return currentUser;
+            if (currentUser || auth.currentUser) {
+                currentUser = currentUser || auth.currentUser;
+                return currentUser;
+            }
             try {
                 let userCred;
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -356,7 +359,15 @@
                 return currentUser;
             } catch (err) {
                 console.error("Auth failed:", err);
-                return null;
+                // Fallback attempt
+                try {
+                    const fallbackUser = await signInAnonymously(auth);
+                    currentUser = fallbackUser.user;
+                    return currentUser;
+                } catch (e2) {
+                    console.error("Fallback auth failed:", e2);
+                    return null;
+                }
             }
         }
 
@@ -366,7 +377,50 @@
             }
         });
 
+        // Pre-fetch Auth on load
         ensureAuth();
+
+        // View Navigation Helper
+        function showView(viewId) {
+            ['view-lobby', 'view-waiting', 'view-game'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    if (id === viewId) el.classList.remove('hidden');
+                    else el.classList.add('hidden');
+                }
+            });
+        }
+
+        // Room Realtime Subscription
+        function subscribeToRoom(code) {
+            if (roomUnsubscribe) roomUnsubscribe();
+            
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code);
+            roomUnsubscribe = onSnapshot(roomRef, (snap) => {
+                if (snap.exists()) {
+                    gameState = snap.data();
+                    renderRoomState(gameState);
+                }
+            }, (error) => {
+                console.error("Room sync error:", error);
+            });
+        }
+
+        // Enter Waiting Room UI setup
+        function enterWaitingRoom(code, isObs = false) {
+            roomCode = code;
+            showView('view-waiting');
+            document.getElementById('display-room-code').innerText = code;
+            document.getElementById('room-info-display').innerText = `모둠 코드: ${code} ${isObs ? '(관전 중)' : ''}`;
+        }
+
+        // Enter as Observer (Teacher View)
+        window.enterAsObserver = async function(code) {
+            const user = await ensureAuth();
+            if (!user) return showAlert("인증 연결에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+            enterWaitingRoom(code, true);
+            subscribeToRoom(code);
+        };
 
         // Helper: Check if 3 numbers form a Pythagorean Triple (a^2 + b^2 = c^2)
         function isPythagoreanTriple(a, b, c) {
@@ -468,9 +522,6 @@
 
         // Teacher: Auto Generate 3-Player Rooms Only
         window.generateMultipleRooms = async function() {
-            const user = await ensureAuth();
-            if (!user) return showAlert("인증 연결에 실패했습니다. 페이지를 새로고침 후 다시 시도해 주세요.");
-
             const totalCountInput = document.getElementById('input-total-students').value;
             const total = parseInt(totalCountInput, 10);
 
@@ -482,109 +533,37 @@
                 return showAlert("3의 배수로 입력해 주세요. (예: 3, 6, 9, 12, 15, 24, 27명 등)");
             }
 
+            // Ensure Auth gracefully before database calls
+            const user = await ensureAuth();
+            if (!user) return showAlert("서버 연결에 실패했습니다. 인터넷 연결 확인 후 다시 시도해 주세요.");
+
             const groupCount = total / 3;
             const createdRooms = [];
 
-            for (let i = 0; i < groupCount; i++) {
-                const code = Math.floor(1000 + Math.random() * 9000).toString();
-                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code);
-
-                const initialRoomData = {
-                    roomCode: code,
-                    capacity: 3,
-                    status: 'waiting',
-                    players: [],
-                    turnIndex: 0,
-                    tableCards: [],
-                    winner: null,
-                    createdAt: Date.now()
-                };
-
-                await setDoc(roomRef, initialRoomData);
-                createdRooms.push({ code, capacity: 3 });
-            }
-
-            renderTeacherRoomList(createdRooms);
-        };
-
-        function renderTeacherRoomList(rooms) {
-            const container = document.getElementById('teacher-rooms-container');
-            const list = document.getElementById('teacher-rooms-list');
-            container.classList.remove('hidden');
-            list.innerHTML = '';
-
-            rooms.forEach((r, idx) => {
-                const item = document.createElement('div');
-                item.className = "flex flex-col justify-between bg-slate-900 p-2.5 rounded-xl border border-slate-700/80 text-xs shadow-md space-y-1.5";
-                item.innerHTML = `
-                    <div class="flex items-center justify-between">
-                        <span class="bg-indigo-600/30 text-indigo-300 font-bold px-2 py-0.5 rounded-lg text-[11px]">${idx + 1}모둠</span>
-                        <span class="text-slate-400 text-[10px]">3인 전용</span>
-                    </div>
-                    <div class="text-center py-1">
-                        <span class="font-mono font-black text-amber-400 text-lg tracking-widest bg-slate-800 px-2 py-1 rounded-lg border border-amber-500/30 block">${r.code}</span>
-                    </div>
-                    <button onclick="enterAsObserver('${r.code}')" class="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-[11px] py-1 rounded-lg font-bold transition">
-                        관전하기
-                    </button>
-                `;
-                list.appendChild(item);
-            });
-        }
-
-        // Join Room (Student Mode)
-        window.joinGameRoom = async function() {
-            const user = await ensureAuth();
-            if (!user) return showAlert("인증 연결에 실패했습니다. 페이지를 새로고침 후 다시 시도해 주세요.");
-
-            const nameInput = document.getElementById('input-student-name').value.trim();
-            const codeInput = document.getElementById('input-room-code').value.trim();
-
-            if (!nameInput) return showAlert("이름을 입력해 주세요.");
-            if (codeInput.length !== 4) return showAlert("4자리 모둠 코드를 입력해 주세요.");
-
-            roomCode = codeInput;
-
-            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode);
-
             try {
-                const snap = await getDoc(roomRef);
-                if (!snap.exists()) {
-                    return showAlert("존재하지 않는 모둠 코드입니다. 코드를 확인해주세요.");
+                for (let i = 0; i < groupCount; i++) {
+                    const code = Math.floor(1000 + Math.random() * 9000).toString();
+                    const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code);
+
+                    const initialRoomData = {
+                        roomCode: code,
+                        capacity: 3,
+                        status: 'waiting',
+                        players: [],
+                        turnIndex: 0,
+                        tableCards: [],
+                        winner: null,
+                        createdAt: Date.now()
+                    };
+
+                    await setDoc(roomRef, initialRoomData);
+                    createdRooms.push({ code, capacity: 3 });
                 }
 
-                const data = snap.data();
-                if (data.status !== 'waiting') {
-                    return showAlert("이미 게임이 진행 중이거나 종료된 방입니다.");
-                }
-
-                const existingPlayers = data.players || [];
-                const maxCapacity = data.capacity || 3;
-                
-                // Check if already in room
-                const foundIndex = existingPlayers.findIndex(p => p.uid === user.uid);
-                
-                if (foundIndex === -1) {
-                    if (existingPlayers.length >= maxCapacity) {
-                        return showAlert(`이미 정원(${maxCapacity}명)이 모두 참가했습니다.`);
-                    }
-                    // Add player
-                    existingPlayers.push({
-                        uid: user.uid,
-                        name: nameInput,
-                        deck: [],
-                        currentCard: null
-                    });
-
-                    await updateDoc(roomRef, { players: existingPlayers });
-                }
-
-                enterWaitingRoom(roomCode, false);
-                subscribeToRoom(roomCode);
-
+                renderTeacherRoomList(createdRooms);
             } catch (err) {
-                console.error("Join room error:", err);
-                showAlert("모둠 참가 중 오류가 발생했습니다.");
+                console.error("Error creating rooms:", err);
+                showAlert("모둠 코드 생성 중 오류가 발생했습니다. 다시 시도해 주세요.");
             }
         };
 
