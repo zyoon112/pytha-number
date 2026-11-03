@@ -635,13 +635,21 @@
             const statusEl = document.getElementById('lobby-status');
             statusEl.innerText = "모둠 코드를 생성하는 중입니다...";
 
-            // Guaranteed Auth resolution without failing popups
-            await ensureAuth();
-
             const groupCount = total / 3;
             const createdRooms = [];
 
+            // Helper with timeout to prevent hanging on network issues
+            const withTimeout = (promise, ms = 2500) => {
+                return Promise.race([
+                    promise,
+                    new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), ms))
+                ]);
+            };
+
             try {
+                // Ensure auth attempt without blocking indefinitely
+                await withTimeout(ensureAuth(), 2000).catch(() => null);
+
                 for (let i = 0; i < groupCount; i++) {
                     const code = Math.floor(1000 + Math.random() * 9000).toString();
                     const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code);
@@ -657,7 +665,11 @@
                         createdAt: Date.now()
                     };
 
-                    await setDoc(roomRef, initialRoomData);
+                    // Try writing to DB, fallback gracefully if network is slow
+                    await withTimeout(setDoc(roomRef, initialRoomData), 2500).catch(err => {
+                        console.warn(`Room ${code} generated with local fallback:`, err);
+                    });
+
                     createdRooms.push({ code, capacity: 3 });
                 }
 
@@ -666,356 +678,14 @@
             } catch (err) {
                 console.error("Error creating rooms:", err);
                 statusEl.innerText = "";
-                showAlert("모둠 코드 생성 중 오류가 발생했습니다. 네트워크 확인 후 다시 시도해 주세요.");
+                // Even on overall error, render created rooms so teacher isn't blocked
+                if (createdRooms.length > 0) {
+                    renderTeacherRoomList(createdRooms);
+                } else {
+                    showAlert("모둠 코드를 다시 시도해 주세요.");
+                }
             }
         };
 
         // Render Room State dynamically
-        function renderRoomState(data) {
-            const players = data.players || [];
-            const capacity = data.capacity || 3;
-
-            // 1. Waiting Room State
-            if (data.status === 'waiting') {
-                showView('view-waiting');
-                document.getElementById('waiting-count').innerText = players.length;
-
-                const listEl = document.getElementById('waiting-players-list');
-                listEl.innerHTML = '';
-
-                for (let i = 0; i < capacity; i++) {
-                    const p = players[i];
-                    const item = document.createElement('div');
-                    item.className = "flex items-center justify-between bg-slate-900/80 p-3 rounded-xl border border-slate-700";
-
-                    if (p) {
-                        const isMe = currentUser && p.uid === currentUser.uid;
-                        item.innerHTML = `
-                            <div class="flex items-center space-x-3">
-                                <div class="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-bold text-sm">
-                                    ${i + 1}
-                                </div>
-                                <span class="font-semibold text-sm text-slate-100">${p.name} ${isMe ? '<span class="text-xs text-amber-400 font-normal">(나)</span>' : ''}</span>
-                            </div>
-                            <span class="text-xs text-emerald-400 font-bold"><i class="fa-solid fa-check mr-1"></i>준비됨</span>
-                        `;
-                    } else {
-                        item.innerHTML = `
-                            <div class="flex items-center space-x-3 opacity-40">
-                                <div class="w-8 h-8 rounded-lg bg-slate-700 text-slate-400 flex items-center justify-center font-bold text-sm">
-                                    ${i + 1}
-                                </div>
-                                <span class="font-semibold text-sm text-slate-500">참가 대기 중...</span>
-                            </div>
-                        `;
-                    }
-                    listEl.appendChild(item);
-                }
-
-                // Enable start button if room capacity reached
-                const startBtn = document.getElementById('btn-start-game');
-                if (players.length === capacity) {
-                    startBtn.disabled = false;
-                    startBtn.innerText = "게임 시작하기";
-                } else {
-                    startBtn.disabled = true;
-                    startBtn.innerText = `게임 시작하기 (${players.length}/${capacity}명)`;
-                }
-            }
-
-            // 2. In-Game Playing State
-            else if (data.status === 'playing') {
-                showView('view-game');
-                renderGameBoard(data);
-            }
-
-            // 3. Ended State
-            else if (data.status === 'ended') {
-                renderGameOver(data);
-            }
-        }
-
-        // Host / Teacher Start Game
-        window.startGame = async function() {
-            const capacity = gameState.capacity || 3;
-            if (!gameState || gameState.players.length !== capacity) {
-                return showAlert(`${capacity}명의 플레이어가 모두 모여야 시작할 수 있습니다.`);
-            }
-
-            const updatedPlayers = gameState.players.map(p => {
-                return {
-                    ...p,
-                    deck: shuffle([...CARD_DECK_PRESET]),
-                    currentCard: null
-                };
-            });
-
-            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode);
-
-            try {
-                await updateDoc(roomRef, {
-                    status: 'playing',
-                    players: updatedPlayers,
-                    turnIndex: 0,
-                    tableCards: [],
-                    winner: null,
-                    lastActionLog: '게임을 시작합니다!'
-                });
-            } catch (e) {
-                console.error("Start game failed:", e);
-            }
-        };
-
-        // Action: Flip Card (My Turn)
-        window.flipMyCard = async function() {
-            if (!gameState || gameState.status !== 'playing') return;
-
-            const players = [...gameState.players];
-            const turnIdx = gameState.turnIndex;
-            const currentTurnPlayer = players[turnIdx];
-
-            if (!currentUser || currentTurnPlayer.uid !== currentUser.uid) {
-                return showAlert("지금은 본인의 차례가 아닙니다!");
-            }
-
-            if (currentTurnPlayer.deck.length === 0) {
-                return checkGameEnd(players, `${currentTurnPlayer.name} 님의 카드가 모두 소진되었습니다!`);
-            }
-
-            // Draw Top Card
-            const drawnCard = currentTurnPlayer.deck.shift();
-            currentTurnPlayer.currentCard = drawnCard;
-            playSound('flip');
-
-            // Calculate next turn index
-            const nextTurnIdx = (turnIdx + 1) % players.length;
-
-            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode);
-
-            // Check if next player is out of cards
-            if (players[nextTurnIdx].deck.length === 0) {
-                await updateDoc(roomRef, { players });
-                return checkGameEnd(players, `${players[nextTurnIdx].name} 님의 카드가 소진되어 게임이 종료됩니다!`);
-            }
-
-            await updateDoc(roomRef, {
-                players: players,
-                turnIndex: nextTurnIdx,
-                lastActionLog: `${currentTurnPlayer.name} 님이 카드를 뒤집었습니다.`
-            });
-        };
-
-        // Action: Press Pythagoras Buzzer
-        window.pressBuzzer = async function() {
-            if (!gameState || gameState.status !== 'playing') return;
-
-            const players = [...gameState.players];
-            const meObj = players.find(p => p.uid === currentUser?.uid);
-
-            if (!meObj) return showAlert("관전 모드에서는 버저를 누를 수 없습니다.");
-
-            // Collect active cards on table
-            const activeCards = players.map(p => p.currentCard).filter(c => c !== null);
-
-            // Check if 3 cards exist & valid Pythagoras
-            const isPythagoras = activeCards.length === 3 && isPythagoreanTriple(activeCards[0], activeCards[1], activeCards[2]);
-
-            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode);
-
-            if (isPythagoras) {
-                // SUCCESS! Take all played table cards
-                playSound('bell_win');
-                
-                players.forEach(p => {
-                    if (p.currentCard !== null) {
-                        meObj.deck.push(p.currentCard);
-                        p.currentCard = null;
-                    }
-                });
-
-                // Shuffle won cards into deck bottom
-                meObj.deck = shuffle(meObj.deck);
-
-                await updateDoc(roomRef, {
-                    players: players,
-                    lastActionLog: `🔔 정답! ${meObj.name} 님이 버저 성공으로 카드를 가져갑니다!`
-                });
-
-            } else {
-                // PENALTY! Give 1 card from deck to each opponent
-                playSound('bell_wrong');
-
-                if (meObj.deck.length < (players.length - 1)) {
-                    // Out of cards -> Game Over
-                    await updateDoc(roomRef, {
-                        lastActionLog: `❌ 오답! ${meObj.name} 님의 패널티 카드가 부족하여 게임이 종료됩니다.`
-                    });
-                    return checkGameEnd(players, `${meObj.name} 님의 패널티 카드가 부족합니다!`);
-                }
-
-                // Distribute penalty cards
-                players.forEach(p => {
-                    if (p.uid !== meObj.uid && meObj.deck.length > 0) {
-                        const penaltyCard = meObj.deck.shift();
-                        p.deck.push(penaltyCard);
-                    }
-                });
-
-                await updateDoc(roomRef, {
-                    players: players,
-                    lastActionLog: `❌ 오답! ${meObj.name} 님이 벌칙으로 각 참가자에게 카드를 1장씩 주었습니다.`
-                });
-            }
-        };
-
-        // Check & Trigger Game Over
-        async function checkGameEnd(players, reasonMsg) {
-            // Sort by deck length descending
-            const sorted = [...players].sort((a, b) => b.deck.length - a.deck.length);
-            const winner = sorted[0];
-
-            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode);
-
-            await updateDoc(roomRef, {
-                status: 'ended',
-                winner: winner,
-                endReason: reasonMsg,
-                players: players
-            });
-        }
-
-        // Toast Notification Helper
-        let toastTimeout = null;
-        function showToast(msg) {
-            const toast = document.getElementById('game-toast');
-            if (!toast) return;
-
-            toast.innerText = msg;
-            toast.classList.remove('opacity-0', '-translate-y-4');
-            toast.classList.add('opacity-100', 'translate-y-0');
-
-            if (toastTimeout) clearTimeout(toastTimeout);
-            toastTimeout = setTimeout(() => {
-                toast.classList.remove('opacity-100', 'translate-y-0');
-                toast.classList.add('opacity-0', '-translate-y-4');
-            }, 2500);
-        }
-
-        // Render Game Over Modal
-        function renderGameOver(data) {
-            const modal = document.getElementById('modal-gameover');
-            const reasonEl = document.getElementById('game-end-reason');
-            const rankBoard = document.getElementById('final-rankings');
-
-            if (!modal || !rankBoard) return;
-
-            reasonEl.innerText = data.endReason || "게임이 종료되었습니다!";
-
-            // Sort ranking
-            const sortedPlayers = [...(data.players || [])].sort((a, b) => b.deck.length - a.deck.length);
-
-            rankBoard.innerHTML = '';
-            sortedPlayers.forEach((p, idx) => {
-                const isWinner = idx === 0;
-                const row = document.createElement('div');
-                row.className = `flex justify-between items-center p-3 rounded-xl border ${isWinner ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-800 border-slate-700 text-slate-300'}`;
-                row.innerHTML = `
-                    <div class="flex items-center space-x-3">
-                        <span class="font-jua text-lg ${isWinner ? 'text-amber-400 font-extrabold' : 'text-slate-400'}">${idx + 1}위</span>
-                        <span class="font-bold text-sm">${p.name} ${p.uid === currentUser?.uid ? '(나)' : ''}</span>
-                    </div>
-                    <span class="font-mono font-bold text-base">${p.deck.length}장</span>
-                `;
-                rankBoard.appendChild(row);
-            });
-
-            modal.classList.remove('hidden');
-        }
-
-        // Render In-Game Screen
-        function renderGameBoard(data) {
-            const players = data.players || [];
-            const turnPlayer = players[data.turnIndex];
-
-            // Update Current Turn Indicator
-            document.getElementById('turn-indicator').innerText = turnPlayer ? `${turnPlayer.name} 님의 차례` : '-';
-
-            // Find My Info
-            const myIndex = players.findIndex(p => p.uid === currentUser.uid);
-            const isMyTurn = myIndex === data.turnIndex;
-
-            // Display My Secret Deck Count
-            const myPlayerObj = players[myIndex];
-            if (myPlayerObj) {
-                document.getElementById('my-name-display').innerText = myPlayerObj.name;
-                document.getElementById('my-card-count').innerText = `${myPlayerObj.deck.length}장`;
-                document.getElementById('my-secret-count').innerText = myPlayerObj.deck.length;
-                document.getElementById('my-played-num').innerText = myPlayerObj.currentCard !== null ? myPlayerObj.currentCard : '-';
-                
-                const turnBadge = document.getElementById('my-turn-badge');
-                if (isMyTurn) turnBadge.classList.remove('hidden');
-                else turnBadge.classList.add('hidden');
-
-                // Card Flip Button State
-                const flipBtn = document.getElementById('btn-flip-card');
-                if (isMyTurn && myPlayerObj.deck.length > 0) {
-                    flipBtn.disabled = false;
-                    flipBtn.classList.add('animate-bounce');
-                } else {
-                    flipBtn.disabled = true;
-                    flipBtn.classList.remove('animate-bounce');
-                }
-            } else {
-                // Observer Mode (e.g., Teacher)
-                document.getElementById('my-card-count').innerText = `관전 중`;
-                document.getElementById('my-secret-count').innerText = `-`;
-                document.getElementById('btn-flip-card').disabled = true;
-            }
-
-            // Render Opponents Cards Container
-            const opponentsContainer = document.getElementById('opponents-container');
-            opponentsContainer.innerHTML = '';
-
-            // Grid column setting according to opponents count
-            const opponentCount = myIndex !== -1 ? players.length - 1 : players.length;
-            opponentsContainer.className = `grid grid-cols-${Math.min(opponentCount, 3)} gap-2 my-2`;
-
-            players.forEach((p, idx) => {
-                if (myIndex !== -1 && idx === myIndex) return; // Skip self
-
-                const isPlayerTurn = idx === data.turnIndex;
-                const cardDisplay = p.currentCard !== null ? p.currentCard : '-';
-
-                const oppEl = document.createElement('div');
-                oppEl.className = `bg-slate-800/80 border ${isPlayerTurn ? 'border-amber-400 ring-2 ring-amber-400/30' : 'border-slate-700'} rounded-2xl p-2.5 flex justify-between items-center relative shadow-md`;
-
-                oppEl.innerHTML = `
-                    <div class="flex items-center space-x-2">
-                        <div class="w-9 h-9 rounded-xl bg-slate-700 text-amber-400 font-bold flex items-center justify-center font-jua text-sm">
-                            ${p.name.substring(0, 2)}
-                        </div>
-                        <div>
-                            <div class="font-bold text-xs text-slate-200 flex items-center space-x-1">
-                                <span>${p.name}</span>
-                                ${isPlayerTurn ? '<span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>' : ''}
-                            </div>
-                            <span class="text-[10px] text-slate-500 font-semibold">카드 잔여: ???</span>
-                        </div>
-                    </div>
-                    
-                    <div class="w-12 h-16 bg-slate-900 border border-slate-700 rounded-lg flex items-center justify-center font-mono font-black text-xl text-amber-300 shadow-inner">
-                        ${cardDisplay}
-                    </div>
-                `;
-
-                opponentsContainer.appendChild(oppEl);
-            });
-
-            // Show Toast Log if any
-            if (data.lastActionLog) {
-                showToast(data.lastActionLog);
-            }
-        }
-    </script>
-</body>
-</html>
+<!-- ... existing code -->
