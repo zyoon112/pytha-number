@@ -114,25 +114,16 @@
                 <!-- Teacher Create Form -->
                 <div id="form-teacher" class="space-y-4 hidden">
                     <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 text-xs text-slate-400 space-y-1">
-                        <p class="font-bold text-slate-300 mb-1"><i class="fa-solid fa-circle-info text-amber-400 mr-1"></i>모둠 자동 생성 안내</p>
-                        <p>• 전체 학생 수와 원하시는 모둠 구성 방식을 선택하면 모둠 코드가 한 번에 생성됩니다.</p>
+                        <p class="font-bold text-slate-300 mb-1"><i class="fa-solid fa-circle-info text-amber-400 mr-1"></i>3인 모둠 자동 생성 안내</p>
+                        <p>• 학급 전체 학생 수를 **3의 배수**로 입력하면 3인 모둠 코드가 생성됩니다.</p>
                         <p>• 생성된 코드를 각 모둠에 전달해 주세요.</p>
                     </div>
 
                     <div class="space-y-3">
                         <div>
-                            <label class="block text-xs font-bold text-slate-400 mb-1">모둠 구성 방식 선택</label>
-                            <select id="select-group-mode" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white font-semibold text-sm focus:outline-none focus:border-indigo-500 transition">
-                                <option value="3-4" selected>3~4인으로 구성 (추천: 남는 인원을 4인 모둠으로)</option>
-                                <option value="2-3">2~3인으로 구성 (남는 인원을 2인 모둠으로)</option>
-                                <option value="3-only">3인으로만 구성 (남는 인원 없이 3인 모둠만 생성)</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label class="block text-xs font-bold text-slate-400 mb-1">학급 전체 학생 수</label>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">학급 전체 학생 수 (3의 배수)</label>
                             <div class="flex space-x-2">
-                                <input type="number" id="input-total-students" placeholder="예: 25" min="2" max="60" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white font-mono text-lg focus:outline-none focus:border-indigo-500 transition">
+                                <input type="number" id="input-total-students" placeholder="예: 24" step="3" min="3" max="60" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white font-mono text-lg focus:outline-none focus:border-indigo-500 transition">
                                 <button onclick="generateMultipleRooms()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold font-jua px-5 py-3 rounded-xl shadow-lg transition whitespace-nowrap">
                                     모둠 생성
                                 </button>
@@ -142,7 +133,7 @@
 
                     <!-- List of generated room codes for teacher (Grid layout without scrollbar) -->
                     <div id="teacher-rooms-container" class="hidden space-y-2 pt-2 border-t border-slate-700/60">
-                        <label class="block text-xs font-bold text-amber-400 mb-1"><i class="fa-solid fa-list-check mr-1"></i>생성된 모둠 코드 목록</label>
+                        <label class="block text-xs font-bold text-amber-400 mb-1"><i class="fa-solid fa-list-check mr-1"></i>생성된 모둠 코드 목록 (3인 모둠)</label>
                         <div id="teacher-rooms-list" class="grid grid-cols-2 sm:grid-cols-3 gap-2">
                             <!-- Dynamic generated rooms list -->
                         </div>
@@ -351,63 +342,21 @@
         // [3,4,5,5,6,7,8,8,9,10,10,12,12,13,15,15,15,17,20,24,24,25,25,26]
         const CARD_DECK_PRESET = [3, 4, 5, 5, 6, 7, 8, 8, 9, 10, 10, 12, 12, 13, 15, 15, 15, 17, 20, 24, 24, 25, 25, 26];
 
-        // Sound FX using Web Audio API
-        function playSound(type) {
+        // Ensure Auth Helper
+        async function ensureAuth() {
+            if (currentUser) return currentUser;
             try {
-                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                if (audioCtx.state === 'suspended') audioCtx.resume();
-
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-
-                const now = audioCtx.currentTime;
-
-                if (type === 'flip') {
-                    osc.type = 'sine';
-                    osc.frequency.setValueAtTime(400, now);
-                    osc.frequency.exponentialRampToValueAtTime(800, now + 0.08);
-                    gain.gain.setValueAtTime(0.15, now);
-                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
-                    osc.start(now);
-                    osc.stop(now + 0.08);
-                } else if (type === 'bell_win') {
-                    // Success Bell
-                    osc.type = 'triangle';
-                    osc.frequency.setValueAtTime(523.25, now); // C5
-                    osc.frequency.setValueAtTime(659.25, now + 0.1); // E5
-                    osc.frequency.setValueAtTime(783.99, now + 0.2); // G5
-                    osc.frequency.setValueAtTime(1046.50, now + 0.3); // C6
-                    gain.gain.setValueAtTime(0.3, now);
-                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
-                    osc.start(now);
-                    osc.stop(now + 0.8);
-                } else if (type === 'bell_wrong') {
-                    // Wrong Buzzer
-                    osc.type = 'sawtooth';
-                    osc.frequency.setValueAtTime(180, now);
-                    osc.frequency.linearRampToValueAtTime(110, now + 0.3);
-                    gain.gain.setValueAtTime(0.3, now);
-                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
-                    osc.start(now);
-                    osc.stop(now + 0.35);
-                }
-            } catch(e) {
-                console.log("Audio play error", e);
-            }
-        }
-
-        // Initialize Auth
-        async function initAuth() {
-            try {
+                let userCred;
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
+                    userCred = await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
-                    await signInAnonymously(auth);
+                    userCred = await signInAnonymously(auth);
                 }
+                currentUser = userCred.user;
+                return currentUser;
             } catch (err) {
-                console.error("Auth init failed:", err);
+                console.error("Auth failed:", err);
+                return null;
             }
         }
 
@@ -417,7 +366,7 @@
             }
         });
 
-        initAuth();
+        ensureAuth();
 
         // Helper: Check if 3 numbers form a Pythagorean Triple (a^2 + b^2 = c^2)
         function isPythagoreanTriple(a, b, c) {
@@ -450,6 +399,51 @@
             if (modal) modal.classList.add('hidden');
         };
 
+        // Sound FX using Web Audio API
+        function playSound(type) {
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                const now = audioCtx.currentTime;
+
+                if (type === 'flip') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(400, now);
+                    osc.frequency.exponentialRampToValueAtTime(800, now + 0.08);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+                    osc.start(now);
+                    osc.stop(now + 0.08);
+                } else if (type === 'bell_win') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(523.25, now);
+                    osc.frequency.setValueAtTime(659.25, now + 0.1);
+                    osc.frequency.setValueAtTime(783.99, now + 0.2);
+                    osc.frequency.setValueAtTime(1046.50, now + 0.3);
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+                    osc.start(now);
+                    osc.stop(now + 0.8);
+                } else if (type === 'bell_wrong') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(180, now);
+                    osc.frequency.linearRampToValueAtTime(110, now + 0.3);
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+                    osc.start(now);
+                    osc.stop(now + 0.35);
+                }
+            } catch(e) {
+                console.log("Audio play error", e);
+            }
+        }
+
         // Role Tab Switch (Student vs Teacher)
         window.switchRoleTab = function(role) {
             const tabStudent = document.getElementById('tab-student');
@@ -472,95 +466,32 @@
             }
         };
 
-        // Teacher: Auto Generate Rooms based on Student Count & Selected Mode
+        // Teacher: Auto Generate 3-Player Rooms Only
         window.generateMultipleRooms = async function() {
-            if (!currentUser) return showAlert("인증 진행 중입니다. 잠시 후 다시 시도해 주세요.");
+            const user = await ensureAuth();
+            if (!user) return showAlert("인증 연결에 실패했습니다. 페이지를 새로고침 후 다시 시도해 주세요.");
 
             const totalCountInput = document.getElementById('input-total-students').value;
-            const groupMode = document.getElementById('select-group-mode').value;
             const total = parseInt(totalCountInput, 10);
 
-            if (isNaN(total) || total < 2) {
-                return showAlert("최소 2명 이상의 학생 수를 입력해 주세요.");
+            if (isNaN(total) || total < 3) {
+                return showAlert("최소 3명 이상의 학생 수를 입력해 주세요.");
             }
 
-            let roomCapacities = [];
-
-            if (groupMode === '3-only') {
-                // 3인 전용 모둠만 생성 (남는 인원은 배분하지 않고 3인 모둠만 최대한 생성)
-                const groupCount = Math.floor(total / 3);
-                if (groupCount < 1) {
-                    return showAlert("3인 모둠을 생성하려면 최소 3명 이상이어야 합니다.");
-                }
-                for (let i = 0; i < groupCount; i++) {
-                    roomCapacities.push(3);
-                }
-                const leftover = total % 3;
-                if (leftover > 0) {
-                    showToast(`⚠️ ${total}명 중 ${groupCount * 3}명만 3인 모둠(${groupCount}개)에 배정되었습니다. (남은 ${leftover}명 미배정)`);
-                }
-            } else if (groupMode === '2-3') {
-                // 2~3인 구성 (3인 위주로 편성하되 남는 인원은 2인 모둠으로 생성)
-                const remainder = total % 3;
-                const groupCount = Math.floor(total / 3);
-
-                if (remainder === 0) {
-                    for (let i = 0; i < groupCount; i++) roomCapacities.push(3);
-                } else if (remainder === 1) {
-                    // e.g. 10명: 3, 3, 2, 2 (3인 2개 + 2인 2개)
-                    if (groupCount >= 1) {
-                        for (let i = 0; i < groupCount - 1; i++) roomCapacities.push(3);
-                        roomCapacities.push(2);
-                        roomCapacities.push(2);
-                    } else {
-                        return showAlert("2~3인 모둠을 구성하기에 인원이 부족합니다.");
-                    }
-                } else if (remainder === 2) {
-                    // e.g. 11명: 3, 3, 3, 2 (3인 3개 + 2인 1개)
-                    for (let i = 0; i < groupCount; i++) roomCapacities.push(3);
-                    roomCapacities.push(2);
-                }
-            } else {
-                // 3~4인 구성 (기본/추천: 3인 위주 편성, 남는 인원을 4인 모둠으로 변경)
-                const remainder = total % 3;
-                const groupCount = Math.floor(total / 3);
-
-                if (remainder === 0) {
-                    for (let i = 0; i < groupCount; i++) roomCapacities.push(3);
-                } else if (remainder === 1) {
-                    // e.g. 25명: 3인 7개 + 4인 1개
-                    if (groupCount >= 1) {
-                        for (let i = 0; i < groupCount - 1; i++) roomCapacities.push(3);
-                        roomCapacities.push(4);
-                    } else {
-                        roomCapacities.push(4);
-                    }
-                } else if (remainder === 2) {
-                    // e.g. 26명: 3인 6개 + 4인 2개
-                    if (groupCount >= 2) {
-                        for (let i = 0; i < groupCount - 2; i++) roomCapacities.push(3);
-                        roomCapacities.push(4);
-                        roomCapacities.push(4);
-                    } else if (groupCount === 1) {
-                        // 5명인 경우: 3인 1개 + 2인 1개로 유연 처리
-                        roomCapacities.push(3);
-                        roomCapacities.push(2);
-                    } else {
-                        roomCapacities.push(2);
-                    }
-                }
+            if (total % 3 !== 0) {
+                return showAlert("3의 배수로 입력해 주세요. (예: 3, 6, 9, 12, 15, 24, 27명 등)");
             }
 
+            const groupCount = total / 3;
             const createdRooms = [];
 
-            for (let i = 0; i < roomCapacities.length; i++) {
-                const cap = roomCapacities[i];
+            for (let i = 0; i < groupCount; i++) {
                 const code = Math.floor(1000 + Math.random() * 9000).toString();
                 const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code);
 
                 const initialRoomData = {
                     roomCode: code,
-                    capacity: cap,
+                    capacity: 3,
                     status: 'waiting',
                     players: [],
                     turnIndex: 0,
@@ -570,7 +501,7 @@
                 };
 
                 await setDoc(roomRef, initialRoomData);
-                createdRooms.push({ code, capacity: cap });
+                createdRooms.push({ code, capacity: 3 });
             }
 
             renderTeacherRoomList(createdRooms);
@@ -588,7 +519,7 @@
                 item.innerHTML = `
                     <div class="flex items-center justify-between">
                         <span class="bg-indigo-600/30 text-indigo-300 font-bold px-2 py-0.5 rounded-lg text-[11px]">${idx + 1}모둠</span>
-                        <span class="text-slate-400 text-[10px]">${r.capacity}인</span>
+                        <span class="text-slate-400 text-[10px]">3인 전용</span>
                     </div>
                     <div class="text-center py-1">
                         <span class="font-mono font-black text-amber-400 text-lg tracking-widest bg-slate-800 px-2 py-1 rounded-lg border border-amber-500/30 block">${r.code}</span>
@@ -601,57 +532,10 @@
             });
         }
 
-        // View Transition Helper
-        function showView(viewId) {
-            ['view-lobby', 'view-waiting', 'view-game'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) {
-                    if (id === viewId) el.classList.remove('hidden');
-                    else el.classList.add('hidden');
-                }
-            });
-        }
-
-        // Enter Waiting Room View UI updates
-        function enterWaitingRoom(code, observerMode = false) {
-            document.getElementById('display-room-code').innerText = code;
-            document.getElementById('room-info-display').innerText = `모둠 코드: ${code} ${observerMode ? '(관전)' : ''}`;
-            
-            const badge = document.getElementById('user-badge');
-            const nameTag = document.getElementById('player-name-tag');
-            if (badge && nameTag) {
-                const inputName = document.getElementById('input-student-name').value.trim();
-                nameTag.innerText = observerMode ? '교사 (관전)' : (inputName || '학생');
-                badge.classList.remove('hidden');
-            }
-
-            showView('view-waiting');
-        }
-
-        // Realtime Firestore Room Listener
-        function subscribeToRoom(code) {
-            if (roomUnsubscribe) roomUnsubscribe();
-
-            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code);
-            roomUnsubscribe = onSnapshot(roomRef, (snapshot) => {
-                if (snapshot.exists()) {
-                    gameState = snapshot.data();
-                    renderRoomState(gameState);
-                }
-            }, (error) => {
-                console.error("Room listener error:", error);
-            });
-        }
-
-        window.enterAsObserver = function(code) {
-            roomCode = code;
-            enterWaitingRoom(code, true);
-            subscribeToRoom(code);
-        };
-
         // Join Room (Student Mode)
         window.joinGameRoom = async function() {
-            if (!currentUser) return showAlert("인증 진행 중입니다. 잠시 후 다시 시도해 주세요.");
+            const user = await ensureAuth();
+            if (!user) return showAlert("인증 연결에 실패했습니다. 페이지를 새로고침 후 다시 시도해 주세요.");
 
             const nameInput = document.getElementById('input-student-name').value.trim();
             const codeInput = document.getElementById('input-room-code').value.trim();
@@ -678,7 +562,7 @@
                 const maxCapacity = data.capacity || 3;
                 
                 // Check if already in room
-                const foundIndex = existingPlayers.findIndex(p => p.uid === currentUser.uid);
+                const foundIndex = existingPlayers.findIndex(p => p.uid === user.uid);
                 
                 if (foundIndex === -1) {
                     if (existingPlayers.length >= maxCapacity) {
@@ -686,7 +570,7 @@
                     }
                     // Add player
                     existingPlayers.push({
-                        uid: currentUser.uid,
+                        uid: user.uid,
                         name: nameInput,
                         deck: [],
                         currentCard: null
