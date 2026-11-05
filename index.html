@@ -388,6 +388,10 @@
 
     const BASE_CARDS = [3, 4, 5, 5, 6, 7, 8, 8, 9, 10, 10, 12, 12, 13, 15, 15, 15, 17, 20, 24, 24, 25, 25, 26];
     // 학생 1명당 위 24장 한 벌씩 지급 (3명 → 총 72장)
+    // 피타고라스 수가 한 판에 4~5번 나오도록: 마지막 피타고라스 수 이후 8~15장째 사이에
+    // 뒤집는 사람의 덱 안에 정답 카드가 있으면 그 카드가 위로 오도록 섞음 (카드 구성은 그대로)
+    const GAP_MIN = 8, GAP_MAX = 15;
+    const randGap = (r) => GAP_MIN + Math.floor(r * (GAP_MAX - GAP_MIN + 1));
     const roomRef = (code) => doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code);
 
     // ---------- 공통 유틸 ----------
@@ -682,11 +686,12 @@
             <div class="card-face ${anim}"><span class="corner tl">${t}</span>${t}<span class="corner br">${t}</span></div></div>`;
     }
 
-    function deckHTML(p, clickable) {
+    function deckHTML(p, clickable, showCount) {
         const n = p.deck.length;
-        if (n === 0) return `<div class="card-back empty">카드<br>없음</div>`;
+        // 다른 학생의 덱은 남은 장수를 숨김 (카드가 다 떨어졌는지도 드러나지 않게)
+        if (n === 0 && showCount) return `<div class="card-back empty">카드<br>없음</div>`;
         return `<div class="card-back ${clickable ? 'clickable' : ''}" ${clickable ? 'onpointerdown="flipMyCard(event)"' : ''}>
-            ${clickable ? '탭해서<br>뒤집기' : 'a²+b²<br>=c²'}<span class="deck-count">${n}</span></div>`;
+            ${clickable ? '탭해서<br>뒤집기' : 'a²+b²<br>=c²'}${showCount ? `<span class="deck-count">${n}</span>` : ''}</div>`;
     }
 
     function labelHTML(p, isTurn, isMe) {
@@ -710,7 +715,7 @@
             const isTurn = playing && i === s.turnIndex;
             const isMe = i === myIdx;
             const canFlip = isMe && isTurn && p.deck.length > 0;
-            const pile = pileHTML(p), deck = deckHTML(p, canFlip), label = labelHTML(p, isTurn, isMe);
+            const pile = pileHTML(p), deck = deckHTML(p, canFlip, isMe || isObserver), label = labelHTML(p, isTurn, isMe);
 
             if (rel === 0) {
                 setHTML(seat, `<div class="flex flex-col items-center" style="gap:1.6cqw">
@@ -791,7 +796,8 @@
                 if (result && result.write) {
                     tx.update(roomRef(roomCode), {
                         players: s.players, turnIndex: s.turnIndex, status: s.status,
-                        version: (s.version || 0) + 1, lastEvent: s.lastEvent, endReason: s.endReason || null
+                        version: (s.version || 0) + 1, lastEvent: s.lastEvent, endReason: s.endReason || null,
+                        sinceTriple: s.sinceTriple || 0, nextTripleAt: s.nextTripleAt || GAP_MIN
                     });
                 } else if (opts.optimistic) {
                     throw new Error('STALE');
@@ -816,6 +822,8 @@
         if (s.status !== 'waiting' || (s.players || []).length !== 3) return null;
         // 각자 24장을 받고, 시작 전에 각자 무작위로 섞음
         s.players = s.players.map((p) => ({ ...p, deck: shuffle(BASE_CARDS), pile: [] }));
+        s.sinceTriple = 0;
+        s.nextTripleAt = randGap(Math.random());
         s.status = 'playing';
         s.turnIndex = 0;
         s.lastEvent = newEvent('start', '게임 시작!');
@@ -825,12 +833,29 @@
     window.flipMyCard = (e) => {
         if (e && e.preventDefault) e.preventDefault();
         const ev = newEvent('flip', '');   // 화면 먼저 반영 + 서버 반영이 같은 이벤트를 쓰도록
+        const r1 = Math.random(), r2 = Math.random();   // 화면/서버가 같은 결과를 내도록 미리 뽑음
         return runAction((s) => {
             const idx = s.players.findIndex(p => p.uid === currentUser.uid);
             if (s.status !== 'playing' || idx !== s.turnIndex) return null;
             const p = s.players[idx];
             if (!p.deck.length) return null;
+
+            const n = s.players.length;
+            const o1 = topCard(s.players[(idx + 1) % n]), o2 = topCard(s.players[(idx + 2) % n]);
+            const since = (s.sinceTriple || 0) + 1;
+            if (since >= (s.nextTripleAt || GAP_MIN) && o1 !== null && o2 !== null) {
+                const cand = p.deck.map((c, k) => isPythagoreanTriple(c, o1, o2) ? k : -1).filter(k => k >= 0);
+                if (cand.length) {
+                    const k = cand[Math.floor(r1 * cand.length)];
+                    p.deck.unshift(p.deck.splice(k, 1)[0]);
+                }
+            }
             p.pile.push(p.deck.shift());
+            s.sinceTriple = since;
+            if (isPythagoreanTriple(...s.players.map(topCard))) {
+                s.sinceTriple = 0;
+                s.nextTripleAt = randGap(r2);
+            }
             s.turnIndex = (idx + 1) % s.players.length;
             s.lastEvent = ev;
             endIfNeeded(s);
