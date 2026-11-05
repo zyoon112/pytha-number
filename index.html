@@ -347,7 +347,7 @@
         setPersistence, browserSessionPersistence
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import {
-        getFirestore, doc, setDoc, getDoc, onSnapshot, runTransaction
+        getFirestore, initializeFirestore, doc, setDoc, getDoc, onSnapshot, runTransaction
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     // Firebase 프로젝트 설정 (pytha-number)
@@ -368,7 +368,14 @@
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
-    const db = getFirestore(app);
+    // 학교·기관 방화벽에서 실시간 연결이 막히는 경우를 위한 우회 방식(롱 폴링)
+    // 한 번 연결에 실패한 기기는 다음 접속부터 자동으로 우회 방식을 사용
+    let FORCE_LP = false;
+    try { FORCE_LP = localStorage.getItem('pytha_force_lp') === '1' || /[?&]lp=1/.test(location.search); } catch (e) {}
+    const db = initializeFirestore(app, FORCE_LP
+        ? { experimentalForceLongPolling: true }
+        : { experimentalAutoDetectLongPolling: true });
+    function markNetworkTrouble() { try { localStorage.setItem('pytha_force_lp', '1'); } catch (e) {} }
 
     // 탭마다 별도 익명 사용자 → 한 컴퓨터에서 여러 탭으로 테스트 가능
     const persistenceReady = setPersistence(auth, browserSessionPersistence).catch(() => {});
@@ -431,8 +438,14 @@
         return r;
     }
 
-    function withTimeout(promise, ms = 6000) {
+    function withTimeout(promise, ms = 15000) {
         return Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error('Timeout')), ms))]);
+    }
+    const isNetErr = (e) => /Timeout|unavailable|network-request-failed|offline|deadline-exceeded/.test(String(e?.code || '') + String(e?.message || ''));
+    // 네트워크 오류면 한 번 더 자동으로 시도
+    async function withRetry(makePromise) {
+        try { return await withTimeout(makePromise()); }
+        catch (e) { if (!isNetErr(e)) throw e; await new Promise(r => setTimeout(r, 1200)); return await withTimeout(makePromise()); }
     }
 
     function explainError(err) {
@@ -443,10 +456,19 @@
         if (code.includes('configuration-not-found')) return "Firebase 콘솔 → Authentication에서 '시작하기'를 누른 뒤\n'익명' 로그인을 사용 설정해 주세요.";
         if (code.includes('api-key-not-valid') || code.includes('invalid-api-key')) return "Firebase API 키가 올바르지 않습니다.\nMY_FIREBASE_CONFIG 값을 다시 확인해 주세요.";
         if (code.includes('not-found') || code.includes('does not exist')) return "Firestore 데이터베이스가 아직 없습니다.\nFirebase 콘솔 → Firestore Database → 데이터베이스 만들기를 진행해 주세요.";
-        if (code.includes('network-request-failed') || code.includes('Timeout') || code.includes('unavailable') || code.includes('offline'))
-            return "서버에 연결되지 않습니다.\n인터넷 연결과 Firestore 데이터베이스 생성 여부를 확인해 주세요.";
+        if (isNetErr(err)) {
+            markNetworkTrouble();
+            if (!navigator.onLine) return "인터넷에 연결되어 있지 않습니다.\nWi-Fi 또는 데이터 연결을 확인해 주세요.";
+            if (IN_APP) return "카카오톡 등 앱 안의 브라우저에서는 연결이 안 될 수 있습니다.\nChrome 또는 Safari로 열어 주세요.";
+            return FORCE_LP
+                ? "서버에 연결되지 않습니다.\n다른 Wi-Fi나 모바일 데이터로 바꿔 접속해 보세요."
+                : "이 기기의 네트워크에서 연결이 막혔습니다.\n연결 방식을 바꿨으니 '새로고침' 후 다시 들어와 주세요.";
+        }
         return "오류가 발생했습니다. 잠시 후 다시 시도해 주세요.\n(" + code.trim() + ")";
     }
+
+    const IN_APP = /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line\//i.test(navigator.userAgent);
+    if (IN_APP) $('lobby-status').innerText = "⚠ 앱 안 브라우저입니다. Chrome·Safari로 열면 더 안정적이에요.";
 
     // 예상치 못한 오류도 화면에 안내 (흰 화면/무반응 방지)
     window.addEventListener('unhandledrejection', (e) => { console.error(e.reason); showAlert(explainError(e.reason)); });
@@ -502,6 +524,10 @@
     }
 
     // ---------- 로비 ----------
+    try {
+        const saved = JSON.parse(sessionStorage.getItem('pytha_join') || 'null');
+        if (saved) { $('input-student-name').value = saved.name || ''; $('input-room-code').value = saved.code || ''; }
+    } catch (e) {}
     window.switchRoleTab = function (role) {
         const s = role === 'student';
         $('tab-student').className = "py-2.5 rounded-lg text-sm font-bold transition-all " + (s ? "bg-amber-400 text-slate-900 shadow" : "text-slate-500 hover:text-slate-700");
@@ -517,11 +543,12 @@
         if (!/^\d{4}$/.test(code)) return showAlert("4자리 모둠 코드를 정확히 입력해 주세요.");
         if (CONFIG_MISSING) return showAlert(explainError());
 
+        try { sessionStorage.setItem('pytha_join', JSON.stringify({ name, code })); } catch (e) {}
         const statusEl = $('lobby-status');
         statusEl.innerText = "모둠에 접속하는 중입니다...";
         try {
-            const user = await withTimeout(ensureAuth());
-            await withTimeout(runTransaction(db, async (tx) => {
+            const user = await withRetry(() => ensureAuth());
+            await withRetry(() => runTransaction(db, async (tx) => {
                 const snap = await tx.get(roomRef(code));
                 if (!snap.exists()) throw new Error('NO_ROOM');
                 const data = snap.data();
@@ -561,18 +588,18 @@
         statusEl.innerText = "모둠 코드를 생성하는 중입니다...";
         const created = [];
         try {
-            await withTimeout(ensureAuth());
+            await withRetry(() => ensureAuth());
             const used = new Set();
             for (let i = 0; i < total / 3; i++) {
                 let code;
                 for (let tries = 0; tries < 20; tries++) {
                     code = String(Math.floor(1000 + Math.random() * 9000));
                     if (used.has(code)) continue;
-                    const snap = await withTimeout(getDoc(roomRef(code)));
+                    const snap = await withRetry(() => getDoc(roomRef(code)));
                     if (!snap.exists() || snap.data().status === 'finished') break;
                 }
                 used.add(code);
-                await withTimeout(setDoc(roomRef(code), {
+                await withRetry(() => setDoc(roomRef(code), {
                     roomCode: code, capacity: 3, status: 'waiting', players: [],
                     turnIndex: 0, version: 0, lastEvent: null, endReason: null, createdAt: Date.now()
                 }));
@@ -604,7 +631,7 @@
     }
 
     window.enterAsObserver = async function (code) {
-        try { await withTimeout(ensureAuth()); } catch (e) { return showAlert(explainError(e)); }
+        try { await withRetry(() => ensureAuth()); } catch (e) { return showAlert(explainError(e)); }
         isObserver = true;
         enterWaitingRoom(code);
         subscribeToRoom(code);
