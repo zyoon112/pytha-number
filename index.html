@@ -893,10 +893,15 @@
     window.pressBuzzer = (e) => {
         if (e && e.preventDefault) e.preventDefault();
         if (!gameState || gameState.status !== 'playing') return;
+        // 누군가 이미 맞혔고 아직 새 카드를 뒤집기 전이면 → 벌칙 없이 안내만
+        const alreadyWon = (st) => st.lastEvent && st.lastEvent.type === 'win';
+        const wonMsg = (st) => `🔔 ${st.lastEvent.winner || '다른 친구'}님이 피타고라스 수를 먼저 맞혔습니다! 이어서 카드를 뒤집으세요.`;
+        if (alreadyWon(gameState)) { showToast(wonMsg(gameState)); return; }
         const seenVersion = gameState.version || 0;
         return runAction((s) => {
             const idx = s.players.findIndex(p => p.uid === currentUser.uid);
             if (s.status !== 'playing' || idx === -1) return null;
+            if (alreadyWon(s)) return { write: false, msg: wonMsg(s) };
             if ((s.version || 0) !== seenVersion) return { write: false, msg: '카드가 바뀌었어요! 다시 확인하고 누르세요.' };
 
             const me = s.players[idx];
@@ -906,7 +911,7 @@
                 s.players.forEach(p => { p.pile = []; });
                 me.deck = me.deck.concat(shuffle(won));
                 const [a, b, c] = [...tops].sort((x, y) => x - y);
-                s.lastEvent = newEvent('win', `🎉 ${me.name} 정답! ${a}²+${b}²=${c}² (+${won.length}장)`);
+                s.lastEvent = { ...newEvent('win', `🎉 ${me.name} 정답! ${a}²+${b}²=${c}² (+${won.length}장)`), winner: me.name };
                 endIfNeeded(s);
             } else {
                 s.players.forEach((p, j) => {
