@@ -391,30 +391,6 @@
                             auth: "https://esm.sh/firebase@11.6.1/auth",
                             store: "https://esm.sh/firebase@11.6.1/database" },
     ];
-    const loadErrors = [];
-    let fbApp, fbAuth, fbStore;
-    for (const src of FB_SOURCES) {
-        try {
-            fbApp = await import(src.app);                       // app을 먼저 받아야 auth·database가 같은 앱을 공유
-            [fbAuth, fbStore] = await Promise.all([import(src.auth), import(src.store)]);
-            console.log('Firebase loaded from', src.name);
-            break;
-        } catch (e) {
-            loadErrors.push(src.name + ': ' + (e && e.message ? e.message : e));
-            fbApp = fbAuth = fbStore = null;
-        }
-    }
-    if (!fbStore) {
-        window.__engine = 'failed';
-        window.__engineFailMsg += "\n\n[오류 정보]\n" + loadErrors.join("\n").slice(0, 400) +
-            "\n주소: " + location.protocol + "//" + location.host;
-        document.getElementById('lobby-status').innerText = "⚠ 게임 서버 프로그램을 불러오지 못했습니다. 버튼을 누르면 자세한 안내가 나옵니다.";
-        throw new Error('Firebase load failed');   // 나머지 게임 코드는 실행하지 않음 (버튼은 안내 메시지를 띄움)
-    }
-    const { initializeApp } = fbApp;
-    const { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, setPersistence, browserSessionPersistence } = fbAuth;
-    const { getDatabase, ref, get, set, onValue, runTransaction } = fbStore;
-
     // Firebase 프로젝트 설정 (pytha-number)
     const MY_FIREBASE_CONFIG = {
         apiKey: "AIzaSyCI236KtsM4M4pQlajGo-Dv2nsTrN_i0UQ",
@@ -433,17 +409,36 @@
         : MY_FIREBASE_CONFIG;
     const CONFIG_MISSING = !firebaseConfig.apiKey || firebaseConfig.apiKey.startsWith('YOUR_');
 
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    // Realtime Database: 읽기 횟수 제한 없이 데이터 전송량으로만 계산 (무료 월 10GB)
-    let db;
-    try { db = getDatabase(app, firebaseConfig.databaseURL); }
-    catch (e) {
-        window.__engine = 'failed';
-        window.__engineFailMsg = "Realtime Database 주소가 올바르지 않습니다.\n코드의 databaseURL을 Firebase 콘솔 → Realtime Database 화면 맨 위 주소로 바꿔 주세요.\n\n(" + e.message + ")";
-        document.getElementById('lobby-status').innerText = "⚠ Realtime Database 주소(databaseURL)를 확인해 주세요.";
-        throw e;
+    // 서버별로 [불러오기 → 앱 시작 → 데이터베이스 연결]까지 시도하고, 실패하면 다음 서버로
+    const loadErrors = [];
+    let fbApp, fbAuth, fbStore, app, auth, db;
+    for (const src of FB_SOURCES) {
+        try {
+            const A = await import(src.app);                     // app을 먼저 받아야 auth·database가 같은 앱을 공유
+            const [U, D] = await Promise.all([import(src.auth), import(src.store)]);
+            const a = A.initializeApp(firebaseConfig, 'pytha-' + src.name);
+            const au = U.getAuth(a);
+            const d = D.getDatabase(a, firebaseConfig.databaseURL);
+            fbApp = A; fbAuth = U; fbStore = D; app = a; auth = au; db = d;
+            console.log('Firebase loaded from', src.name);
+            break;
+        } catch (e) {
+            loadErrors.push(src.name + ': ' + (e && e.message ? e.message : e));
+        }
     }
+    if (!db) {
+        window.__engine = 'failed';
+        const detail = loadErrors.join("\n");
+        const urlProblem = /database url|databaseURL|Database URL|firebaseio|firebasedatabase/i.test(detail);
+        window.__engineFailMsg = (urlProblem
+            ? "Realtime Database 주소(databaseURL)에 문제가 있습니다.\nFirebase 콘솔 → Realtime Database → 데이터 탭 맨 위 주소를 코드의 databaseURL에 그대로 넣어 주세요."
+            : window.__engineFailMsg) +
+            "\n\n[오류 정보]\n" + detail.slice(0, 500) + "\n주소: " + location.protocol + "//" + location.host;
+        document.getElementById('lobby-status').innerText = "⚠ 게임 서버 연결 실패: " + (loadErrors[0] || '').slice(0, 160);
+        throw new Error('Firebase init failed');   // 나머지 게임 코드는 실행하지 않음 (버튼은 안내 메시지를 띄움)
+    }
+    const { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, setPersistence, browserSessionPersistence } = fbAuth;
+    const { ref, get, set, onValue, runTransaction } = fbStore;
 
     // 탭마다 별도 익명 사용자 → 한 컴퓨터에서 여러 탭으로 테스트 가능
     const persistenceReady = setPersistence(auth, browserSessionPersistence).catch(() => {});
