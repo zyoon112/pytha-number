@@ -151,6 +151,9 @@
                 <p class="text-xs text-slate-500" id="room-info-display">방 미접속</p>
             </div>
         </div>
+        <button id="btn-teacher-home" onclick="goTeacherHome()" class="hidden items-center gap-1.5 bg-sky-500 hover:bg-sky-400 text-white font-bold text-xs md:text-sm px-3 py-2 rounded-xl shadow-md shadow-sky-200 transition whitespace-nowrap">
+            <i class="fa-solid fa-house"></i><span>교사 홈 화면으로</span>
+        </button>
         <div id="user-badge" class="hidden flex items-center space-x-2 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">
             <span class="w-3 h-3 rounded-full bg-emerald-400 animate-pulse"></span>
             <span id="player-name-tag" class="font-bold text-sm text-slate-700"></span>
@@ -320,7 +323,10 @@
                 <p id="game-end-reason" class="text-xs text-slate-500">누군가의 카드가 모두 소진되었습니다.</p>
             </div>
             <div id="final-rankings" class="space-y-2 bg-amber-50 p-4 rounded-2xl border border-amber-100 text-left"></div>
-            <button onclick="location.reload()" class="w-full bg-gradient-to-r from-amber-400 to-orange-400 hover:from-amber-300 hover:to-orange-300 text-white font-jua text-lg font-bold py-3.5 rounded-xl shadow-lg shadow-orange-200 transition">
+            <button id="btn-gameover-teacher-home" onclick="goTeacherHome()" class="hidden w-full bg-sky-500 hover:bg-sky-400 text-white font-jua text-lg font-bold py-3.5 rounded-xl shadow-lg shadow-sky-200 transition">
+                <i class="fa-solid fa-house mr-1"></i>교사 홈 화면으로 (다른 모둠 관전)
+            </button>
+            <button id="btn-gameover-reload" onclick="location.reload()" class="w-full bg-gradient-to-r from-amber-400 to-orange-400 hover:from-amber-300 hover:to-orange-300 text-white font-jua text-lg font-bold py-3.5 rounded-xl shadow-lg shadow-orange-200 transition">
                 처음 화면으로 돌아가기
             </button>
         </div>
@@ -340,15 +346,74 @@
     </footer>
 </div>
 
+<!-- 화면 기본 동작: 게임 서버 프로그램이 늦거나 막혀도 버튼이 먹통이 되지 않도록 먼저 정의 -->
+<script>
+    window.__engine = 'loading';
+    function __el(id) { return document.getElementById(id); }
+    window.closeAlert = function () { __el('custom-alert').classList.add('hidden'); };
+    function __alert(msg) { __el('custom-alert-msg').innerText = msg; __el('custom-alert').classList.remove('hidden'); }
+    window.switchRoleTab = function (role) {
+        var s = role === 'student';
+        __el('tab-student').className = "py-2.5 rounded-lg text-sm font-bold transition-all " + (s ? "bg-amber-400 text-slate-900 shadow" : "text-slate-500 hover:text-slate-700");
+        __el('tab-teacher').className = "py-2.5 rounded-lg text-sm font-bold transition-all " + (!s ? "bg-sky-500 text-white shadow" : "text-slate-500 hover:text-slate-700");
+        __el('form-student').classList.toggle('hidden', !s);
+        __el('form-teacher').classList.toggle('hidden', s);
+    };
+    window.__engineFailMsg = "게임 서버 프로그램(Firebase)을 불러오지 못했습니다.\n\n" +
+        "• 인터넷 연결을 확인해 주세요.\n" +
+        "• 학교 Wi-Fi라면 모바일 데이터로 바꿔 보세요.\n" +
+        "• 미리보기 창이 아니라 Chrome·Safari에서 직접 열어 주세요.\n" +
+        "• 광고 차단 앱이 있다면 잠시 꺼 주세요.\n\n그다음 새로고침해 주세요.";
+    // 게임 기능은 서버 프로그램이 준비되면 실제 기능으로 바뀜
+    ['joinGameRoom', 'generateMultipleRooms', 'enterAsObserver', 'startGame', 'flipMyCard', 'pressBuzzer', 'goTeacherHome'].forEach(function (name) {
+        window[name] = function () {
+            __alert(window.__engine === 'failed' ? window.__engineFailMsg : "게임을 준비하는 중입니다. 잠시 후 다시 눌러 주세요.");
+        };
+    });
+    // 15초가 지나도 준비가 안 되면 안내
+    setTimeout(function () {
+        if (window.__engine === 'loading') {
+            __el('lobby-status').innerText = "⏳ 인터넷이 느려 게임을 준비하는 데 시간이 걸리고 있어요. 조금만 기다려 주세요.";
+        }
+    }, 8000);
+</script>
+
 <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import {
-        getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged,
-        setPersistence, browserSessionPersistence
-    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import {
-        getFirestore, initializeFirestore, doc, setDoc, getDoc, onSnapshot, runTransaction
-    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    // Firebase를 여러 서버에서 차례로 시도 (학교망에서 한 곳이 막혀도 다른 곳에서 받아옴)
+    const FB_SOURCES = [
+        { name: 'Google',   app: "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js",
+                            auth: "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js",
+                            store: "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js" },
+        { name: 'jsDelivr', app: "https://cdn.jsdelivr.net/npm/firebase@11.6.1/app/+esm",
+                            auth: "https://cdn.jsdelivr.net/npm/firebase@11.6.1/auth/+esm",
+                            store: "https://cdn.jsdelivr.net/npm/firebase@11.6.1/firestore/+esm" },
+        { name: 'esm.sh',   app: "https://esm.sh/firebase@11.6.1/app",
+                            auth: "https://esm.sh/firebase@11.6.1/auth",
+                            store: "https://esm.sh/firebase@11.6.1/firestore" },
+    ];
+    const loadErrors = [];
+    let fbApp, fbAuth, fbStore;
+    for (const src of FB_SOURCES) {
+        try {
+            fbApp = await import(src.app);                       // app을 먼저 받아야 auth·firestore가 같은 앱을 공유
+            [fbAuth, fbStore] = await Promise.all([import(src.auth), import(src.store)]);
+            console.log('Firebase loaded from', src.name);
+            break;
+        } catch (e) {
+            loadErrors.push(src.name + ': ' + (e && e.message ? e.message : e));
+            fbApp = fbAuth = fbStore = null;
+        }
+    }
+    if (!fbStore) {
+        window.__engine = 'failed';
+        window.__engineFailMsg += "\n\n[오류 정보]\n" + loadErrors.join("\n").slice(0, 400) +
+            "\n주소: " + location.protocol + "//" + location.host;
+        document.getElementById('lobby-status').innerText = "⚠ 게임 서버 프로그램을 불러오지 못했습니다. 버튼을 누르면 자세한 안내가 나옵니다.";
+        throw new Error('Firebase load failed');   // 나머지 게임 코드는 실행하지 않음 (버튼은 안내 메시지를 띄움)
+    }
+    const { initializeApp } = fbApp;
+    const { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, setPersistence, browserSessionPersistence } = fbAuth;
+    const { getFirestore, initializeFirestore, doc, setDoc, getDoc, onSnapshot, runTransaction } = fbStore;
 
     // Firebase 프로젝트 설정 (pytha-number)
     const MY_FIREBASE_CONFIG = {
@@ -617,12 +682,13 @@
 
     function renderTeacherRoomList(codes) {
         $('teacher-rooms-list').innerHTML = codes.map((code, idx) => `
-            <div class="bg-white border-2 border-amber-100 hover:border-amber-300 p-2.5 rounded-xl flex flex-col justify-between shadow-sm transition">
+            <div data-code="${code}" class="bg-white border-2 border-amber-100 hover:border-amber-300 p-2.5 rounded-xl flex flex-col justify-between shadow-sm transition">
                 <div class="flex items-center justify-between mb-1">
                     <span class="text-[11px] font-bold text-slate-500">모둠 ${idx + 1}</span>
                     <span class="text-[10px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded font-bold">3인 전용</span>
                 </div>
                 <div class="text-center font-mono font-black text-orange-500 text-xl tracking-widest my-1">${code}</div>
+                <div class="watched-tag hidden text-center text-[10px] font-bold text-sky-600">👀 최근 관전</div>
                 <button onclick="enterAsObserver('${code}')" class="mt-1 w-full bg-sky-50 hover:bg-sky-100 text-sky-600 font-bold text-xs py-1.5 rounded-lg border border-sky-200 transition flex items-center justify-center space-x-1">
                     <i class="fa-solid fa-eye text-[10px]"></i><span>관전하기</span>
                 </button>
@@ -635,7 +701,41 @@
         isObserver = true;
         enterWaitingRoom(code);
         subscribeToRoom(code);
+        $('btn-teacher-home').classList.remove('hidden');
+        $('btn-teacher-home').classList.add('flex');
+        $('btn-gameover-teacher-home').classList.remove('hidden');
+        $('btn-gameover-reload').classList.add('hidden');
+        markWatching(code);
     };
+
+    // 교사 홈(모둠 코드 목록)으로 돌아가기: 관전 연결만 끊고 목록은 그대로 유지
+    window.goTeacherHome = function () {
+        if (roomUnsubscribe) { roomUnsubscribe(); roomUnsubscribe = null; }
+        roomCode = null; gameState = null; lastServerState = null;
+        lastEventId = null; firstSnapshot = true;
+        for (const k of Object.keys(prevTops)) delete prevTops[k];
+        for (let k = 0; k < 3; k++) { const el = $('seat-' + k); el.__html = ''; el.innerHTML = ''; }
+        $('modal-gameover').classList.add('hidden');
+        $('game-toast').classList.remove('toast-show');
+        closeAlert();
+        $('btn-teacher-home').classList.add('hidden');
+        $('btn-teacher-home').classList.remove('flex');
+        $('room-info-display').innerText = '교사 홈 · 관전할 모둠을 선택하세요';
+        switchRoleTab('teacher');
+        showView('view-lobby');
+        window.scrollTo(0, 0);
+    };
+
+    // 방금 관전한 모둠 표시
+    function markWatching(code) {
+        document.querySelectorAll('#teacher-rooms-list [data-code]').forEach(el => {
+            const on = el.dataset.code === code;
+            el.classList.toggle('border-sky-400', on);
+            el.classList.toggle('bg-sky-50', on);
+            const tag = el.querySelector('.watched-tag');
+            if (tag) tag.classList.toggle('hidden', !on);
+        });
+    }
 
     function enterWaitingRoom(code) {
         roomCode = code;
@@ -928,6 +1028,9 @@
             return { write: true };
         }, { buzzer: true });
     };
+
+    window.__engine = 'ready';
+    if ($('lobby-status').innerText.startsWith('⏳')) $('lobby-status').innerText = '';
 </script>
 </body>
 </html>
